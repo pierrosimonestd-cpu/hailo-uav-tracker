@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+title: "hailo-uav-tracker: real-time UAV detection and pan/tilt tracking on a 13 TOPS edge NPU"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - alias: pierrosimonestd-cpu
+    email: pierrosimone.std@gmail.com
+repository-code: "https://github.com/pierrosimonestd-cpu/hailo-uav-tracker"
+license: MIT
+version: 0.1.0
+date-released: "2026-09-17"
+keywords:
+  - computer-vision
+  - object-detection
+  - multi-object-tracking
+  - unmanned-aerial-vehicle
+  - edge-ai
+  - hailo
+  - raspberry-pi
+  - control-systems
+references:
+  - type: article
+    title: "Vision-based Anti-UAV Detection and Tracking"
+    authors:
+      - family-names: Zhao
+        given-names: Jie
+      - family-names: Zhang
+        given-names: Jingshu
+      - family-names: Li
+        given-names: Dongdong
+      - family-names: Wang
+        given-names: Dong
+    journal: "IEEE Transactions on Intelligent Transportation Systems"
+    year: 2022
+    notes: "DUT Anti-UAV, the detection benchmark used to report accuracy."
+  - type: conference-paper
+    title: "ByteTrack: Multi-Object Tracking by Associating Every Detection Box"
+    authors:
+      - family-names: Zhang
+        given-names: Yifu
+    collection-title: "European Conference on Computer Vision (ECCV)"
+    year: 2022
+    notes: "The two-stage association strategy this tracker implements."

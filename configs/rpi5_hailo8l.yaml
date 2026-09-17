@@ -1,0 +1,67 @@
+# Raspberry Pi 5 + AI HAT+ (Hailo-8L, 13 TOPS) + MG90S pan/tilt turret.
+#
+# Every value here is either measured or justified in docs/; the ones worth
+# re-measuring on your own build are marked.
+
+detector:
+  # Produced by tools/export_onnx.py then tools/compile_hailo.sh.
+  model: models/uav_yolov8n_640.hef
+  backend: hailo
+  # 0.35 rather than the usual 0.25: the tracker's low-score pass (see
+  # ByteTracker.low_threshold) recovers weak detections, so the detector itself
+  # can afford to be stricter and emit fewer false tracks.
+  conf_threshold: 0.35
+  iou_threshold: 0.45
+  labels: [uav]
+
+camera:
+  source: picamera
+  width: 1280
+  height: 720
+  fps: 30.0
+  # Raspberry Pi Camera Module 3 (standard, not wide): 66 degrees horizontal.
+  # MEASURE THIS if you use a different lens - it sets the pixel-to-angle gain,
+  # and an error here shows up as a scale error in the whole control loop.
+  horizontal_fov_deg: 66.0
+
+tracker:
+  high_threshold: 0.5
+  low_threshold: 0.1
+  match_threshold: 0.3
+  second_match_threshold: 0.2
+  # 30 frames at 30 fps: one second of coasting through an occlusion.
+  max_age: 30
+  min_hits: 3
+
+control:
+  # MEASURE THIS with benchmarks/bench_latency.py on your own hardware. It is
+  # the single most important number in this file: see docs/benchmarks.md.
+  latency_s: 0.045
+  feedforward_gain: 0.9
+  estimator_window: 5
+  home_pan_deg: 90.0
+  home_tilt_deg: 90.0
+  pan:
+    min_deg: 0.0
+    max_deg: 180.0
+    # MG90S at 4.8 V: 0.1 s per 60 degrees.
+    max_rate_deg_s: 600.0
+    deadband_deg: 0.5
+    kp: 4.5
+    ki: 0.5
+    kd: 0.25
+  tilt:
+    # Mechanically restricted: the camera mount fouls the base below 20 degrees.
+    min_deg: 20.0
+    max_deg: 160.0
+    max_rate_deg_s: 600.0
+    deadband_deg: 0.5
+    kp: 4.5
+    ki: 0.5
+    kd: 0.25
+
+link:
+  enabled: true
+  port: /dev/ttyUSB0
+  baudrate: 500000
+  heartbeat_interval_s: 0.2

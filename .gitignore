@@ -1,0 +1,41 @@
+# --- Datasets, weights and benchmark scratch -------------------------------
+# Every dataset in this repository is fetched by a script in tools/; none of
+# them are vendored. See docs/dataset.md.
+data/
+runs/
+*.pt
+*.onnx
+*.hef
+*.har
+*.engine
+!tests/fixtures/*.onnx
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- Tooling ---------------------------------------------------------------
+arduino-cli.exe
+arduino-cli.zip
+.arduino15/
+*.log
+
+# --- OS / editors ----------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.antigravitycli/

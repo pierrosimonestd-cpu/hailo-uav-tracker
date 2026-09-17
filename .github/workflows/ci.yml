@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff==0.6.9
+      - name: ruff check
+        run: ruff check src tools benchmarks tests
+      - name: ruff format --check
+        run: ruff format --check src tools benchmarks tests
+
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        # No PyTorch and no HailoRT: the library, the tracker and the controller
+        # must all work without them, and CI is where that stays true.
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install scipy
+      - name: pytest
+        run: pytest tests --cov=uavtrack --cov-report=term-missing
+
+  firmware:
+    name: Firmware protocol conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build the host-side firmware test
+        # Compiles the real firmware header with a normal C++ compiler, so the
+        # ESP32 implementation of the wire protocol is checked against the same
+        # vectors as the Python one on every commit.
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror \
+            -I firmware/esp32_pantilt \
+            tests/firmware/test_protocol.cpp -o test_protocol
+      - name: Run conformance checks
+        run: ./test_protocol
+      - name: Cross-check against the Python implementation
+        run: |
+          pip install -e .
+          python - <<'EOF'
+          import subprocess, sys
+          sys.path.insert(0, "src")
+          from uavtrack.io.protocol import crc8
+          # The C++ test pins these; assert the Python side agrees, so the two
+          # can never drift apart silently.
+          expected = {b"": 0x00, b"\x01": 0x31, b"\x01\x02\x03\x04": 0xFE,
+                      bytes(range(16)): 0xF0, b"123456789": 0xA2}
+          for data, value in expected.items():
+              assert crc8(data) == value, (data, hex(crc8(data)), hex(value))
+          print("python/c++ CRC vectors agree")
+          EOF
+
+  firmware-build:
+    name: ESP32 firmware build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Arduino CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh -s -- -b "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install the ESP32 core and ESP32Servo
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \
+            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install ESP32Servo
+      - name: Compile
+        run: arduino-cli compile --fqbn esp32:esp32:esp32doit-devkit-v1 --warnings all firmware/esp32_pantilt
+
+  docs:
+    name: Benchmark tables are current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .
+      - name: Check docs/benchmarks.md matches benchmarks/results
+        # The tables are generated, never hand-edited. This fails if someone
+        # edits a number by hand or forgets to regenerate after a new run.
+        run: python benchmarks/make_report.py --check

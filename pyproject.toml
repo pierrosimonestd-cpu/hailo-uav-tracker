@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uavtrack"
+version = "0.1.0"
+description = "Real-time UAV detection and pan/tilt tracking on Raspberry Pi 5 with a Hailo-8L 13 TOPS NPU"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "pierrosimonestd-cpu", email = "pierrosimone.std@gmail.com" }]
+keywords = ["uav", "drone", "object-detection", "tracking", "hailo", "raspberry-pi", "edge-ai", "yolo"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+# Runtime dependencies of the tracking pipeline itself. Deliberately small:
+# the pipeline must install on a Raspberry Pi 5 without a PyTorch wheel.
+dependencies = [
+  "numpy>=1.24",
+  "opencv-python-headless>=4.8",
+  "pyyaml>=6.0",
+  "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+# Desktop / CI: ONNX Runtime inference, export and quantisation.
+onnx = ["onnx>=1.15", "onnxruntime>=1.17"]
+# Training, export and dataset preparation (not needed on the Pi).
+train = ["ultralytics>=8.3", "torch>=2.1", "torchvision>=0.16"]
+# Benchmark harness: COCO metrics, tracking metrics, plots.
+bench = ["pycocotools>=2.0.7", "motmetrics>=1.4", "matplotlib>=3.7", "pandas>=2.0", "gdown>=5.1"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.4", "pre-commit>=3.5"]
+
+[project.urls]
+Homepage = "https://github.com/pierrosimonestd-cpu/hailo-uav-tracker"
+Issues = "https://github.com/pierrosimonestd-cpu/hailo-uav-tracker/issues"
+
+[project.scripts]
+uavtrack = "uavtrack.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tools", "benchmarks", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM"]
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]

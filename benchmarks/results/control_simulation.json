@@ -1,0 +1,177 @@
+{
+  "kind": "simulation",
+  "generated_utc": "2026-09-17T10:22:17+00:00",
+  "python": "3.12.6",
+  "gains": {
+    "kp": 4.5,
+    "ki": 0.5,
+    "kd": 0.25
+  },
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "note": "Closed-loop simulation with the servo model in uavtrack.control.plant. Not a hardware measurement.",
+  "studies": {
+    "latency": [
+      {
+        "latency_ms": 10,
+        "effective_fps": 100.0,
+        "rms_error_deg": 0.6804,
+        "max_error_deg": 1.0271,
+        "in_frame_fraction": 1.0,
+        "seeds": 5
+      },
+      {
+        "latency_ms": 20,
+        "effective_fps": 50.0,
+        "rms_error_deg": 0.6875,
+        "max_error_deg": 1.0539,
+        "in_frame_fraction": 1.0,
+        "seeds": 5
+      },
+      {
+        "latency_ms": 30,
+        "effective_fps": 33.3,
+        "rms_error_deg": 0.7298,
+        "max_error_deg": 1.1402,
+        "in_frame_fraction": 1.0,
+        "seeds": 5
+      },
+      {
+        "latency_ms": 45,
+        "effective_fps": 22.2,
+        "rms_error_deg": 0.8313,
+        "max_error_deg": 1.2077,
+        "in_frame_fraction": 1.0,
+        "seeds": 5
+      },
+      {
+        "latency_ms": 60,
+        "effective_fps": 16.7,
+        "rms_error_deg": 0.8655,
+        "max_error_deg": 1.2435,
+        "in_frame_fraction": 1.0,
+        "seeds": 5
+      },
+      {
+        "latency_ms": 80,
+        "effective_fps": 12.5,
+        "rms_error_deg": 1.0068,
+        "max_error_deg": 1.395,
+        "in_frame_fraction": 1.0,
+        "seeds": 5
+      },
+      {
+        "latency_ms": 120,
+        "effective_fps": 8.3,
+        "rms_error_deg": 1.2128,
+        "max_error_deg": 1.6311,
+        "in_frame_fraction": 1.0,
+        "seeds": 5
+      },
+      {
+        "latency_ms": 160,
+        "effective_fps": 6.2,
+        "rms_error_deg": 1.4536,
+        "max_error_deg": 1.925,
+        "in_frame_fraction": 1.0,
+        "seeds": 5
+      },
+      {
+        "latency_ms": 200,
+        "effective_fps": 5.0,
+        "rms_error_deg": 1.8344,
+        "max_error_deg": 2.3693,
+        "in_frame_fraction": 1.0,
+        "seeds": 5
+      },
+      {
+        "latency_ms": 300,
+        "effective_fps": 3.3,
+        "rms_error_deg": 2.7735,
+        "max_error_deg": 4.4796,
+        "in_frame_fraction": 1.0,
+        "seeds": 5
+      }
+    ],
+    "feedforward": [
+      {
+        "frequency_hz": 0.05,
+        "peak_target_rate_deg_s": 4.71,
+        "rms_error_deg_ff_off": 1.0173,
+        "rms_error_deg_ff_on": 0.3384,
+        "error_reduction": 0.6674
+      },
+      {
+        "frequency_hz": 0.1,
+        "peak_target_rate_deg_s": 9.42,
+        "rms_error_deg_ff_off": 1.9323,
+        "rms_error_deg_ff_on": 0.4075,
+        "error_reduction": 0.7891
+      },
+      {
+        "frequency_hz": 0.15,
+        "peak_target_rate_deg_s": 14.14,
+        "rms_error_deg_ff_off": 2.8944,
+        "rms_error_deg_ff_on": 0.8313,
+        "error_reduction": 0.7128
+      },
+      {
+        "frequency_hz": 0.2,
+        "peak_target_rate_deg_s": 18.85,
+        "rms_error_deg_ff_off": 3.8059,
+        "rms_error_deg_ff_on": 1.3561,
+        "error_reduction": 0.6437
+      },
+      {
+        "frequency_hz": 0.3,
+        "peak_target_rate_deg_s": 28.27,
+        "rms_error_deg_ff_off": 5.4779,
+        "rms_error_deg_ff_on": 2.8644,
+        "error_reduction": 0.4771
+      }
+    ],
+    "dropout": [
+      {
+        "dropout": 0.0,
+        "rms_error_deg": 0.8313,
+        "max_error_deg": 1.2077,
+        "in_frame_fraction": 1.0
+      },
+      {
+        "dropout": 0.1,
+        "rms_error_deg": 0.8354,
+        "max_error_deg": 1.2401,
+        "in_frame_fraction": 1.0
+      },
+      {
+        "dropout": 0.2,
+        "rms_error_deg": 0.8392,
+        "max_error_deg": 1.3038,
+        "in_frame_fraction": 1.0
+      },
+      {
+        "dropout": 0.3,
+        "rms_error_deg": 0.8515,
+        "max_error_deg": 1.3412,
+        "in_frame_fraction": 1.0
+      },
+      {
+        "dropout": 0.5,
+        "rms_error_deg": 1.073,
+        "max_error_deg": 2.3974,
+        "in_frame_fraction": 1.0
+      },
+      {
+        "dropout": 0.7,
+        "rms_error_deg": 48.0891,
+        "max_error_deg": 82.2133,
+        "in_frame_fraction": 0.7825
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+# Desktop / CI configuration: ONNX Runtime on CPU, no turret attached.
+# Used for development, for the accuracy benchmarks, and by `uavtrack check`.
+
+detector:
+  model: models/uav_yolov8n_640.onnx
+  backend: onnx
+  conf_threshold: 0.35
+  iou_threshold: 0.45
+  labels: [uav]
+
+camera:
+  source: "0"
+  width: 1280
+  height: 720
+  fps: 30.0
+  horizontal_fov_deg: 66.0
+
+tracker:
+  high_threshold: 0.5
+  low_threshold: 0.1
+  match_threshold: 0.3
+  second_match_threshold: 0.2
+  max_age: 30
+  min_hits: 3
+
+control:
+  # CPU inference is far slower than the NPU; see docs/benchmarks.md.
+  latency_s: 0.12
+  feedforward_gain: 0.9
+  estimator_window: 5
+  home_pan_deg: 90.0
+  home_tilt_deg: 90.0
+  pan: {min_deg: 0.0, max_deg: 180.0, max_rate_deg_s: 600.0, deadband_deg: 0.5, kp: 4.5, ki: 0.5, kd: 0.25}
+  tilt: {min_deg: 20.0, max_deg: 160.0, max_rate_deg_s: 600.0, deadband_deg: 0.5, kp: 4.5, ki: 0.5, kd: 0.25}
+
+link:
+  enabled: false
+  port: COM5
+  baudrate: 500000

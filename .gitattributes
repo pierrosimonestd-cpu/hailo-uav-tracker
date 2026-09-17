@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+*.stl   binary
+*.3mf   binary
+*.prt.* binary
+*.jpg   binary
+*.png   binary
+*.pt    binary
+*.onnx  binary
+*.hef   binary
+
+*.ino   linguist-language=C++
