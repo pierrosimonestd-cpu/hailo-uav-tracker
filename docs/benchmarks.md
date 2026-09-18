@@ -77,7 +77,7 @@ mixed-precision analysis for the same reason, which is part of why the HEF is
 the measurement that ultimately counts.
 
 For scale, Hailo's own published float-to-hardware gap on COCO is 0.6–1.5 mAP
-points for the YOLOv8/YOLO11 family (§4).
+points for the YOLOv8/YOLO11 family (§5).
 
 ---
 
@@ -101,7 +101,31 @@ measured on **your** hardware.
 
 ---
 
-## 3. Bird discrimination
+## 3. Tracking — DUT Anti-UAV sequences
+
+```bash
+python tools/fetch_dut_antiuav.py --out data/dut_antiuav_tracking --splits tracking
+python benchmarks/eval_tracking.py --model runs/train/uav_yolov8n/weights/best.pt
+```
+
+<!-- BEGIN GENERATED: tracking -->
+_No results yet. Run the benchmark to populate this table._
+<!-- END GENERATED: tracking -->
+
+**Not comparable to the dataset's SOT baselines.** A single-object tracker is
+handed the ground-truth box in frame one and only has to follow it. This
+pipeline is never told where the target is — it detects, associates and selects
+a primary target with no initialisation. That is a strictly harder task, and the
+numbers are reported as what they are.
+
+*Recall* is the column that keeps the others honest: a tracker can post a good
+success curve while answering on only a third of the frames. *Re-acquisitions*
+counts identity changes on the primary target — each one is a moment where a
+real turret would have swung somewhere else.
+
+---
+
+## 4. Bird discrimination
 
 Birds are the canonical false positive for ground-to-air UAV detection: similar
 apparent size at range, same sky background, similar motion. DUT Anti-UAV
@@ -122,7 +146,7 @@ onto a pigeon.
 
 ---
 
-## 4. Published Hailo-8L throughput
+## 5. Published Hailo-8L throughput
 
 Not measurements from this project. These are **Hailo's published Model Zoo
 figures on COCO**, measured on an Intel Core i5-9400 over PCIe Gen 3 ×4 with
@@ -140,12 +164,12 @@ can do:
 Source: [Hailo Model Zoo, HAILO8L object detection](https://github.com/hailo-ai/hailo_model_zoo/blob/master/docs/public_models/HAILO8L/HAILO8L_object_detection.rst)
 
 yolov8n at 202 FPS gives the control loop roughly an order of magnitude more
-frames than it can use — §5 shows the loop bandwidth is capped near 1 Hz by
+frames than it can use — §6 shows the loop bandwidth is capped near 1 Hz by
 latency. The useful question for this system is latency, not frame rate.
 
 ---
 
-## 5. Closed-loop pointing — simulation
+## 6. Closed-loop pointing — simulation
 
 **These are simulation results.** The servo model — transport delay, first-order
 lag, hard slew-rate limit — is documented in
@@ -157,7 +181,7 @@ lag, hard slew-rate limit — is documented in
 python benchmarks/bench_control.py --study all
 ```
 
-### 5.1 Pointing error against sense-to-act latency
+### 6.1 Pointing error against sense-to-act latency
 
 Target orbiting at 14 °/s; mean of five seeds; steady state after 2 s.
 
@@ -180,7 +204,7 @@ This is the table that justifies the accelerator. Inference time enters the
 control loop as dead time, dead time caps the achievable loop bandwidth, and
 bandwidth is what keeps a manoeuvring target centred.
 
-### 5.2 Velocity feed-forward
+### 6.2 Velocity feed-forward
 
 <!-- BEGIN GENERATED: control-feedforward -->
 | Peak target rate | Feed-forward off | Feed-forward on | Reduction |
@@ -198,7 +222,7 @@ error on a moving target. Getting the reconstruction right is subtle — two
 plausible approaches are unstable, and
 [control-design.md](control-design.md) §5 works through why.
 
-### 5.3 Robustness to missed detections
+### 6.3 Robustness to missed detections
 
 <!-- BEGIN GENERATED: control-dropout -->
 | Detections missed | RMS error | In frame |
@@ -232,6 +256,7 @@ python benchmarks/eval_detection.py --model models/uav_yolov8n_640.onnx      --t
 python benchmarks/eval_detection.py --model models/uav_yolov8n_640.int8.onnx --tag yolov8n-int8-onnx
 python benchmarks/bench_latency.py  --model models/uav_yolov8n_640.onnx      --tag yolov8n-fp32-onnx
 python benchmarks/eval_hard_negatives.py --model runs/train/uav_yolov8n/weights/best.pt --fetch
+python benchmarks/eval_tracking.py --model runs/train/uav_yolov8n/weights/best.pt
 python benchmarks/bench_control.py --study all
 
 python benchmarks/make_report.py

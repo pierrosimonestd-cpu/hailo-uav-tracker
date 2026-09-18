@@ -117,6 +117,39 @@ def hard_negative_table(results_dir: Path) -> str:
     )
 
 
+def tracking_table(results_dir: Path) -> str:
+    payloads = load(results_dir, "tracking_*.json")
+    rows = []
+    for p in payloads:
+        o = p["overall"]
+        rows.append(
+            [
+                f"`{p['tag']}`",
+                str(o["sequences"]),
+                f"{o['total_frames']:,}",
+                f"{o['success_auc']:.3f}",
+                f"{o['success_at_0_5']:.3f}",
+                f"{o['precision_20px']:.3f}",
+                f"{o['recall']:.3f}",
+                str(o["reacquisitions_total"]),
+            ]
+        )
+    return table(
+        [
+            "Model",
+            "Sequences",
+            "Frames",
+            "Success AUC",
+            "Success@0.5",
+            "P@20px",
+            "Recall",
+            "Re-acquisitions",
+        ],
+        rows,
+        align="---:",
+    )
+
+
 def control_tables(results_dir: Path) -> dict[str, str]:
     path = results_dir / "control_simulation.json"
     if not path.exists():
@@ -246,6 +279,7 @@ def main() -> int:
         "detection": detection_table(args.results),
         "latency": latency_table(args.results),
         "hard-negatives": hard_negative_table(args.results),
+        "tracking": tracking_table(args.results),
         "readme-latency": readme_latency_table(args.results),
         "readme-feedforward": readme_feedforward_table(args.results),
         **control_tables(args.results),

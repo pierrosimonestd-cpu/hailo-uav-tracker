@@ -84,6 +84,17 @@ distant targets, which are the ones worth detecting early.
 _No results yet. Run the benchmark to populate this table._
 <!-- END GENERATED: latency -->
 
+### Tracking — DUT Anti-UAV sequences
+
+<!-- BEGIN GENERATED: tracking -->
+_No results yet. Run the benchmark to populate this table._
+<!-- END GENERATED: tracking -->
+
+Detect-and-track with no ground-truth initialisation, so this is a strictly
+harder task than the single-object-tracking baselines published with the
+dataset and is not compared against them. *Recall* keeps the rest honest: a
+tracker can post a good success curve while answering on a third of the frames.
+
 ### Velocity feed-forward — closed-loop simulation
 
 <!-- BEGIN GENERATED: readme-feedforward -->
@@ -195,7 +206,7 @@ being silently ignored.
 src/uavtrack/      detect/ · track/ · control/ · io/ · data/   the library
 firmware/          ESP32 pan/tilt controller, framed protocol
 hardware/cad/      printable STL/3MF plus Creo sources
-benchmarks/        accuracy, latency, hard negatives, control studies
+benchmarks/        detection, tracking, latency, hard negatives, control
 tools/             dataset fetch/prepare, train, export, quantise, Hailo compile
 configs/           Pi + Hailo, and a desktop ONNX config
 docs/              architecture, control design, benchmarks, hardware, dataset
