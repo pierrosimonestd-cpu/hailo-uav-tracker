@@ -8,9 +8,9 @@
 // Arduino, no ESP32 -- and checks it against the same vectors and the same
 // adversarial streams as tests/test_protocol.py.
 //
-// Build and run:
-//   c++ -std=c++17 -Wall -Wextra -Werror -I firmware/esp32_pantilt \
-//       tests/firmware/test_protocol.cpp -o /tmp/test_protocol && /tmp/test_protocol
+// Build and run (one line; a trailing backslash inside a // comment is itself
+// a line continuation, which -Wcomment rejects and this file is built -Werror):
+//   c++ -std=c++17 -Wall -Wextra -Werror -I firmware/esp32_pantilt tests/firmware/test_protocol.cpp -o /tmp/test_protocol && /tmp/test_protocol
 
 #include <cstdint>
 #include <cstdio>

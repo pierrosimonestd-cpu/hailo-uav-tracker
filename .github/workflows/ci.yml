@@ -19,7 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install ruff==0.6.9
+      # From the dev extra, so the pin cannot drift away from pyproject.
+      - run: pip install -e ".[dev]"
       - name: ruff check
         run: ruff check src tools benchmarks tests
       - name: ruff format --check
@@ -88,9 +89,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Arduino CLI
+        # BINDIR, not `-b`: the installer reads the destination from the
+        # environment, and passing `-b` makes it look for a release literally
+        # named "-b" and fail with a 404.
         run: |
-          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh -s -- -b "$HOME/.local/bin"
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh -o install.sh
+          BINDIR="$HOME/.local/bin" sh install.sh
+          rm -f install.sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/arduino-cli" version
       - name: Install the ESP32 core and ESP32Servo
         run: |
           arduino-cli config init

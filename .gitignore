@@ -1,8 +1,12 @@
 # --- Datasets, weights and benchmark scratch -------------------------------
 # Every dataset in this repository is fetched by a script in tools/; none of
 # them are vendored. See docs/dataset.md.
-data/
-runs/
+#
+# Anchored with a leading slash. A bare `data/` matches a directory of that
+# name at ANY depth, which silently excluded the src/uavtrack/data package from
+# the repository -- everything worked locally and nothing worked on a clone.
+/data/
+/runs/
 *.pt
 *.onnx
 *.hef
