@@ -85,16 +85,50 @@ def load_groundtruth(path: Path) -> list[tuple[float, float, float, float] | Non
 
 
 def find_sequences(root: Path) -> list[tuple[str, Path, Path]]:
-    """Locate ``(name, frame_dir, groundtruth)`` triples under ``root``."""
-    sequences = []
-    for gt_path in sorted(root.rglob("groundtruth*.txt")):
-        directory = gt_path.parent
-        candidates = [directory, directory / "img", directory / "imgs"]
-        for candidate in candidates:
-            frames = sorted(candidate.glob("*.jpg")) if candidate.is_dir() else []
-            if frames:
-                sequences.append((directory.name, candidate, gt_path))
-                break
+    """Locate ``(name, frame_dir, groundtruth)`` triples under ``root``.
+
+    Two layouts are supported, because the DUT tracking subset uses the second
+    one and most other benchmarks use the first:
+
+    * annotations beside the frames -- ``<seq>/groundtruth.txt`` next to
+      ``<seq>/*.jpg`` or ``<seq>/img/*.jpg``;
+    * annotations in a sibling directory -- ``video01/*.jpg`` under one tree and
+      ``video01_gt.txt`` under another, which is how DUT ships them.
+
+    Directories of frames with no findable annotation are skipped with a warning
+    rather than silently dropped: a sequence missing from the average is a much
+    quieter way to be wrong than one that errors.
+    """
+    # Index every .txt under the root once, by stem, for the sibling layout.
+    annotations: dict[str, Path] = {}
+    for path in root.rglob("*.txt"):
+        annotations.setdefault(path.stem.lower(), path)
+
+    sequences: list[tuple[str, Path, Path]] = []
+    seen: set[Path] = set()
+
+    for frame_dir in sorted({p.parent for p in root.rglob("*.jpg")}):
+        if frame_dir in seen:
+            continue
+        seen.add(frame_dir)
+
+        # The sequence is named after the frame directory, unless the frames sit
+        # in a generic img/ subdirectory, in which case its parent names it.
+        name = frame_dir.parent.name if frame_dir.name in {"img", "imgs"} else frame_dir.name
+
+        candidates = [
+            *sorted(frame_dir.glob("groundtruth*.txt")),
+            *sorted(frame_dir.parent.glob("groundtruth*.txt")),
+        ]
+        for key in (f"{name}_gt", f"{name}_groundtruth", name):
+            if key.lower() in annotations:
+                candidates.append(annotations[key.lower()])
+
+        if candidates:
+            sequences.append((name, frame_dir, candidates[0]))
+        else:
+            print(f"[warn] no annotation found for {frame_dir}, skipping")
+
     return sequences
 
 
