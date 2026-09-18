@@ -66,7 +66,7 @@ virtualenv, create it with `--system-site-packages` or the import will fail.
 # 1. Train, or download a release checkpoint
 python tools/train_uav.py --data data/dut_antiuav/dut_antiuav.yaml --epochs 20
 
-# 2. Export to ONNX: opset 11, static shapes, no NMS
+# 2. Export to ONNX: opset 13, static shapes, no NMS
 python tools/export_onnx.py --weights runs/train/uav_yolov8n/weights/best.pt
 
 # 3. Build the calibration tensor from TRAINING images
