@@ -36,7 +36,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import cv2  # noqa: E402
 
-from uavtrack.detect.factory import build_detector  # noqa: E402
+from uavtrack.detect.factory import build_detector, infer_backend_from_path  # noqa: E402
+from uavtrack.detect.preprocess import DOWNSCALE_KERNELS  # noqa: E402
 
 # Scored at a low threshold: COCO AP integrates over the precision-recall curve,
 # so suppressing low-confidence detections before scoring truncates the curve
@@ -172,6 +173,13 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None, help="evaluate only the first N images")
     parser.add_argument("--out", type=Path, default=Path("benchmarks/results"))
     parser.add_argument("--threads", type=int, default=None, help="ONNX Runtime intra-op threads")
+    parser.add_argument(
+        "--downscale",
+        default="area",
+        choices=sorted(DOWNSCALE_KERNELS),
+        help="letterbox shrinking kernel (onnx backend only); 'linear' reproduces "
+        "Ultralytics' preprocessing, see docs/benchmarks.md",
+    )
     args = parser.parse_args()
 
     if not args.gt.exists():
@@ -180,6 +188,14 @@ def main() -> int:
     kwargs: dict = {"conf_threshold": EVAL_CONF_THRESHOLD}
     if args.threads is not None:
         kwargs["intra_op_threads"] = args.threads
+    # Only the ONNX backend takes a kernel: Ultralytics does its own resizing,
+    # and the Hailo path letterboxes identically but is not what the ablation
+    # varies. Passing it to either would be a silent no-op, so it is an error.
+    if args.downscale != "area":
+        backend = args.backend or infer_backend_from_path(args.model)
+        if backend != "onnx":
+            sys.exit(f"--downscale applies to the onnx backend, not {backend}")
+        kwargs["downscale"] = args.downscale
 
     detector = build_detector(args.model, backend=args.backend, **kwargs)
     tag = args.tag or Path(args.model).stem

@@ -37,6 +37,7 @@ class OnnxDetector(DetectorBackend):
         labels: tuple[str, ...] = ("uav",),
         providers: list[str] | None = None,
         intra_op_threads: int | None = None,
+        downscale: str = "area",
     ) -> None:
         try:
             import onnxruntime as ort
@@ -70,6 +71,7 @@ class OnnxDetector(DetectorBackend):
         self._name = f"onnx:{provider.lower()}"
 
         self._model_path = model_path
+        self._downscale = downscale
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
         self.labels = labels
@@ -83,7 +85,7 @@ class OnnxDetector(DetectorBackend):
         return self._name
 
     def infer(self, frame: np.ndarray) -> list[Detection]:
-        padded, transform = letterbox(frame, self._input_size)
+        padded, transform = letterbox(frame, self._input_size, downscale=self._downscale)
 
         # BGR -> RGB, HWC -> NCHW, uint8 -> float32 in [0, 1].
         blob = padded[:, :, ::-1].transpose(2, 0, 1)[None].astype(np.float32) / 255.0

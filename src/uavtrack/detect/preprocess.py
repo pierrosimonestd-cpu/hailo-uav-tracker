@@ -73,10 +73,21 @@ class Letterbox:
         return self.to_frame(scaled)
 
 
+#: Downscaling kernels that :func:`letterbox` will accept by name.
+#:
+#: Only the shrinking kernel is selectable. Upscaling is always bilinear, since
+#: ``INTER_AREA`` degenerates to nearest-neighbour when magnifying.
+DOWNSCALE_KERNELS = {
+    "area": cv2.INTER_AREA,
+    "linear": cv2.INTER_LINEAR,
+}
+
+
 def letterbox(
     image: np.ndarray,
     net_size: tuple[int, int],
     pad_value: int = 114,
+    downscale: str = "area",
 ) -> tuple[np.ndarray, Letterbox]:
     """Resize ``image`` into ``net_size`` preserving aspect ratio, centre-padded.
 
@@ -86,18 +97,30 @@ def letterbox(
         pad_value: Constant used for the padded border. 114 matches the value
             Ultralytics uses at train time, so the padded border looks like
             what the network saw during training.
+        downscale: Kernel used when shrinking -- ``"area"`` or ``"linear"``.
+            The default is worth roughly two points of ``AP_small`` over
+            bilinear; ``"linear"`` exists so that result can be reproduced, and
+            so this implementation can be scored against Ultralytics on equal
+            terms. See docs/benchmarks.md.
 
     Returns:
         The padded image and the :class:`Letterbox` describing the transform.
     """
+    try:
+        shrink_kernel = DOWNSCALE_KERNELS[downscale]
+    except KeyError:
+        raise ValueError(
+            f"unknown downscale kernel {downscale!r}; expected one of "
+            f"{', '.join(sorted(DOWNSCALE_KERNELS))}"
+        ) from None
     src_h, src_w = image.shape[:2]
     net_w, net_h = net_size
     scale = min(net_w / src_w, net_h / src_h)
     new_w, new_h = int(round(src_w * scale)), int(round(src_h * scale))
 
-    # cv2.INTER_AREA is the correct kernel when shrinking; it anti-aliases and
-    # measurably preserves small, low-contrast targets such as a distant UAV.
-    interp = cv2.INTER_AREA if scale < 1 else cv2.INTER_LINEAR
+    # The shrinking kernel anti-aliases; it measurably preserves small,
+    # low-contrast targets such as a distant UAV. Magnifying is always bilinear.
+    interp = shrink_kernel if scale < 1 else cv2.INTER_LINEAR
     resized = cv2.resize(image, (new_w, new_h), interpolation=interp)
 
     pad_w, pad_h = net_w - new_w, net_h - new_h

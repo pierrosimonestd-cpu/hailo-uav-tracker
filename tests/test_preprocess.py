@@ -101,3 +101,94 @@ def test_empty_input_is_handled():
     _, t = letterbox(image, (640, 640))
     assert t.to_frame(np.zeros((0, 4), dtype=np.float32)).shape == (0, 4)
     assert t.normalised_to_frame(np.zeros((0, 4), dtype=np.float32)).shape == (0, 4)
+
+
+# ------------------------------------------------------- the shrinking kernel
+#
+# The resolutions here are deliberate. At an exact 2:1 downscale OpenCV's
+# bilinear filter averages the same 2x2 block that INTER_AREA does, so the two
+# kernels are bit-identical and any test comparing them at 1280x720 -> 640
+# passes or fails for reasons that have nothing to do with the code. 1920x1080
+# gives a 3:1 ratio, where bilinear samples 2 of every 3 pixels per axis and the
+# kernels genuinely differ. docs/benchmarks.md has the measured consequence.
+
+
+def test_the_downscale_kernel_changes_the_pixels_at_a_non_dyadic_ratio():
+    rng = np.random.default_rng(0)
+    image = rng.integers(0, 255, (1080, 1920, 3), dtype=np.uint8)
+
+    area, _ = letterbox(image, (640, 640), downscale="area")
+    linear, _ = letterbox(image, (640, 640), downscale="linear")
+
+    assert area.shape == linear.shape
+    assert not np.array_equal(area, linear)
+
+
+def test_the_kernels_coincide_at_an_exact_two_to_one_downscale():
+    """Not a quirk to work around -- the reason the ablation shows no gain at
+    the deployed 1280x720 capture resolution. Pinned so nobody 'fixes' the
+    documentation by assuming the kernel always matters."""
+    rng = np.random.default_rng(0)
+    image = rng.integers(0, 255, (720, 1280, 3), dtype=np.uint8)
+
+    area, _ = letterbox(image, (640, 640), downscale="area")
+    linear, _ = letterbox(image, (640, 640), downscale="linear")
+
+    assert np.array_equal(area, linear)
+
+
+def test_the_kernels_agree_on_the_geometry():
+    """Only the resampling differs; the transform must not."""
+    image = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    _, area = letterbox(image, (640, 640), downscale="area")
+    _, linear = letterbox(image, (640, 640), downscale="linear")
+
+    assert (area.scale, area.pad_x, area.pad_y) == (linear.scale, linear.pad_x, linear.pad_y)
+
+
+def test_bilinear_loses_thin_targets_at_some_sub_pixel_offsets():
+    """The actual reason the default is `area`, and it is not "more signal".
+
+    Averaged over sub-pixel offsets the two kernels pass the same total energy.
+    The difference is variance. A one-pixel-wide line -- what a distant UAV
+    becomes at range -- is rendered by area-averaging at the same intensity
+    wherever it falls, while bilinear at a 3:1 ratio samples two columns of
+    every three: the line may land on a sample and come through at full
+    intensity, or land between samples and disappear entirely.
+
+    A detector does not benefit from the offsets where bilinear over-delivers.
+    It fails on the ones where the target is gone.
+    """
+    area_peaks, linear_peaks = [], []
+    for offset in range(24):
+        image = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        image[:, 300 + offset] = 255
+
+        area, transform = letterbox(image, (640, 640), downscale="area")
+        linear, _ = letterbox(image, (640, 640), downscale="linear")
+
+        # Inside the letterbox border only: the 114 padding is brighter than an
+        # area-averaged thin line and would mask what is being measured.
+        top = int(transform.pad_y)
+        bottom = top + int(round(image.shape[0] * transform.scale))
+        area_peaks.append(int(area[top:bottom].max()))
+        linear_peaks.append(int(linear[top:bottom].max()))
+
+    assert len(set(area_peaks)) == 1, (
+        f"area-averaging should be offset-invariant, saw {sorted(set(area_peaks))}"
+    )
+    assert min(linear_peaks) == 0, "expected bilinear to drop the target entirely somewhere"
+    assert max(linear_peaks) > area_peaks[0], "expected bilinear to overshoot somewhere"
+
+    # The mean is a wash; the distribution is not.
+    assert sum(linear_peaks) / len(linear_peaks) == pytest.approx(area_peaks[0], rel=0.05)
+    worse = sum(1 for peak in linear_peaks if peak < area_peaks[0])
+    assert worse > len(linear_peaks) // 2, (
+        f"only {worse}/{len(linear_peaks)} offsets were worse than area-averaging"
+    )
+
+
+def test_an_unknown_kernel_is_rejected_by_name():
+    image = np.zeros((720, 1280, 3), dtype=np.uint8)
+    with pytest.raises(ValueError, match="unknown downscale kernel"):
+        letterbox(image, (640, 640), downscale="lanczos")
