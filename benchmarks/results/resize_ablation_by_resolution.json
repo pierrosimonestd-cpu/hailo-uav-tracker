@@ -1,0 +1,94 @@
+{
+  "kind": "measured",
+  "generated_utc": "2026-09-18T11:52:04+00:00",
+  "note": "Regrouping of detections already written by the two ablation runs; no inference was repeated. A zero delta at an exact 2:1 downscale is not noise: OpenCV's bilinear filter averages the same 2x2 block that INTER_AREA does, so the kernels produce identical pixels there.",
+  "runs": {
+    "area": "benchmarks\\results\\yolov8n-fp32-onnx\\detections.json",
+    "linear": "benchmarks\\results\\ablation-inter-linear\\detections.json"
+  },
+  "min_images_for_a_claim": 50,
+  "by_resolution": [
+    {
+      "width": 1920,
+      "height": 1080,
+      "downscale_ratio": 3.0,
+      "images": 1348,
+      "ap_area": 0.47692741904108094,
+      "ap_linear": 0.45400038668247494,
+      "ap_delta": 0.022927032358605992,
+      "ap_small_area": 0.42210000736732645,
+      "ap_small_linear": 0.3985372364142286,
+      "ap_small_delta": 0.023562770953097834,
+      "interpretable": true
+    },
+    {
+      "width": 1280,
+      "height": 720,
+      "downscale_ratio": 2.0,
+      "images": 836,
+      "ap_area": 0.672117895539045,
+      "ap_linear": 0.672117895539045,
+      "ap_delta": 0.0,
+      "ap_small_area": 0.48740216585982693,
+      "ap_small_linear": 0.48740216585982693,
+      "ap_small_delta": 0.0,
+      "interpretable": true
+    },
+    {
+      "width": 960,
+      "height": 720,
+      "downscale_ratio": 1.5,
+      "images": 8,
+      "ap_area": 0.796947194719472,
+      "ap_linear": 0.796947194719472,
+      "ap_delta": 0.0,
+      "ap_small_area": 0.7999999999999999,
+      "ap_small_linear": 0.7999999999999999,
+      "ap_small_delta": 0.0,
+      "interpretable": false
+    },
+    {
+      "width": 640,
+      "height": 360,
+      "downscale_ratio": 1.0,
+      "images": 6,
+      "ap_area": 0.5864356435643564,
+      "ap_linear": 0.5864356435643564,
+      "ap_delta": 0.0,
+      "ap_small_area": 0.6999999999999998,
+      "ap_small_linear": 0.6999999999999998,
+      "ap_small_delta": 0.0,
+      "interpretable": false
+    },
+    {
+      "width": 1440,
+      "height": 1080,
+      "downscale_ratio": 2.25,
+      "images": 1,
+      "ap_area": 0.5999999999999999,
+      "ap_linear": 0.25,
+      "ap_delta": 0.34999999999999987,
+      "ap_small_area": -1.0,
+      "ap_small_linear": -1.0,
+      "ap_small_delta": 0.0,
+      "interpretable": false
+    },
+    {
+      "width": 696,
+      "height": 643,
+      "downscale_ratio": 1.0875,
+      "images": 1,
+      "ap_area": 0.6242574257425743,
+      "ap_linear": 0.6242574257425743,
+      "ap_delta": 0.0,
+      "ap_small_area": -1.0,
+      "ap_small_linear": -1.0,
+      "ap_small_delta": 0.0,
+      "interpretable": false
+    }
+  ],
+  "host": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.6"
+  }
+}

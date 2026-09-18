@@ -1,0 +1,80 @@
+{
+  "tag": "yolov8n-fp32-pytorch",
+  "kind": "measured",
+  "generated_utc": "2026-09-18T11:41:12+00:00",
+  "model": "runs\\train\\uav_yolov8n\\weights\\best.pt",
+  "backend": "ultralytics:cpu",
+  "negative_source": "Open Images V7 validation, class Bird",
+  "excluded_classes": [
+    "Airplane",
+    "Helicopter",
+    "Missile",
+    "Rocket"
+  ],
+  "images": 593,
+  "operating_threshold": 0.35,
+  "false_positive_rate_at_operating_threshold": 0.2344,
+  "threshold_for_target_fp_rate": 0.9,
+  "target_fp_rate": 0.01,
+  "sweep": [
+    {
+      "threshold": 0.1,
+      "images_with_false_positive": 268,
+      "false_positive_rate": 0.45194
+    },
+    {
+      "threshold": 0.2,
+      "images_with_false_positive": 199,
+      "false_positive_rate": 0.33558
+    },
+    {
+      "threshold": 0.25,
+      "images_with_false_positive": 173,
+      "false_positive_rate": 0.29174
+    },
+    {
+      "threshold": 0.3,
+      "images_with_false_positive": 151,
+      "false_positive_rate": 0.25464
+    },
+    {
+      "threshold": 0.35,
+      "images_with_false_positive": 139,
+      "false_positive_rate": 0.2344
+    },
+    {
+      "threshold": 0.4,
+      "images_with_false_positive": 124,
+      "false_positive_rate": 0.20911
+    },
+    {
+      "threshold": 0.5,
+      "images_with_false_positive": 93,
+      "false_positive_rate": 0.15683
+    },
+    {
+      "threshold": 0.6,
+      "images_with_false_positive": 59,
+      "false_positive_rate": 0.09949
+    },
+    {
+      "threshold": 0.7,
+      "images_with_false_positive": 34,
+      "false_positive_rate": 0.05734
+    },
+    {
+      "threshold": 0.8,
+      "images_with_false_positive": 13,
+      "false_positive_rate": 0.02192
+    },
+    {
+      "threshold": 0.9,
+      "images_with_false_positive": 1,
+      "false_positive_rate": 0.00169
+    }
+  ],
+  "host": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.6"
+  }
+}

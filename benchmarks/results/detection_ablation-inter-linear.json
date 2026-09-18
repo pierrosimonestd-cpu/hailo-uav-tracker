@@ -1,0 +1,40 @@
+{
+  "tag": "ablation-inter-linear",
+  "kind": "measured",
+  "generated_utc": "2026-09-18T11:47:46+00:00",
+  "model": "models/uav_yolov8n_640.onnx",
+  "backend": "onnx:cpu",
+  "input_size": [
+    640,
+    640
+  ],
+  "dataset": "data\\dut_antiuav\\coco\\test.json",
+  "images": 2200,
+  "eval_conf_threshold": 0.001,
+  "metrics": {
+    "AP": 0.54277,
+    "AP50": 0.88603,
+    "AP75": 0.56694,
+    "AP_small": 0.39663,
+    "AP_medium": 0.56655,
+    "AP_large": 0.71553,
+    "AR_1": 0.56797,
+    "AR_10": 0.60156,
+    "AR_100": 0.60526,
+    "AR_small": 0.47524,
+    "AR_medium": 0.625,
+    "AR_large": 0.77237
+  },
+  "latency_ms": {
+    "mean": 31.427,
+    "median": 31.096,
+    "p95": 35.836,
+    "min": 25.389
+  },
+  "wall_seconds": 87.6,
+  "host": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python": "3.12.6"
+  }
+}

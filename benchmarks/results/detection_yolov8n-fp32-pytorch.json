@@ -1,0 +1,40 @@
+{
+  "tag": "yolov8n-fp32-pytorch",
+  "kind": "measured",
+  "generated_utc": "2026-09-18T11:13:34+00:00",
+  "model": "runs\\train\\uav_yolov8n\\weights\\best.pt",
+  "backend": "ultralytics:cpu",
+  "input_size": [
+    640,
+    640
+  ],
+  "dataset": "data\\dut_antiuav\\coco\\test.json",
+  "images": 2200,
+  "eval_conf_threshold": 0.001,
+  "metrics": {
+    "AP": 0.5427,
+    "AP50": 0.88579,
+    "AP75": 0.57384,
+    "AP_small": 0.395,
+    "AP_medium": 0.5674,
+    "AP_large": 0.71286,
+    "AR_1": 0.56731,
+    "AR_10": 0.60298,
+    "AR_100": 0.6045,
+    "AR_small": 0.47193,
+    "AR_medium": 0.62691,
+    "AR_large": 0.77148
+  },
+  "latency_ms": {
+    "mean": 37.164,
+    "median": 36.844,
+    "p95": 43.516,
+    "min": 27.104
+  },
+  "wall_seconds": 100.2,
+  "host": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python": "3.12.6"
+  }
+}
