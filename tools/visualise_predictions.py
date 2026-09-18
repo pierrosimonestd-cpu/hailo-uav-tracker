@@ -56,8 +56,11 @@ def select_images(gt: dict, count: int) -> list[dict]:
 def draw(frame: np.ndarray, box: tuple[float, ...], colour, label: str) -> None:
     x1, y1, x2, y2 = (int(v) for v in box)
     cv2.rectangle(frame, (x1, y1), (x2, y2), colour, 2)
-    cv2.putText(frame, label, (x1, max(14, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 3, cv2.LINE_AA)
-    cv2.putText(frame, label, (x1, max(14, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour, 1, cv2.LINE_AA)
+    origin = (x1, max(14, y1 - 6))
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    # Dark outline first, so the label stays readable against bright sky.
+    cv2.putText(frame, label, origin, font, 0.5, (0, 0, 0), 3, cv2.LINE_AA)
+    cv2.putText(frame, label, origin, font, 0.5, colour, 1, cv2.LINE_AA)
 
 
 def fit_cell(frame: np.ndarray, size: int) -> np.ndarray:
