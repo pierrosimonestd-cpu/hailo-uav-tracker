@@ -199,7 +199,7 @@ benchmarks/        accuracy, latency, hard negatives, control studies
 tools/             dataset fetch/prepare, train, export, quantise, Hailo compile
 configs/           Pi + Hailo, and a desktop ONNX config
 docs/              architecture, control design, benchmarks, hardware, dataset
-tests/             132 tests, plus a C++ conformance test for the firmware
+tests/             168 tests, plus a C++ conformance test for the firmware
 ```
 
 ## Testing
