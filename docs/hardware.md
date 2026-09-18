@@ -34,6 +34,11 @@ Print `yoke_mg90s_fit_test.stl` before committing to a four-hour print. Servo
 body tolerances vary between suppliers, and a pocket 0.3 mm undersized means
 either a broken part or a servo you cannot remove.
 
+The Creo sources under `hardware/cad/creo/` keep the native `.prt.N` versioning,
+where the **highest** `N` is the current revision -- `base.prt.6` supersedes
+`base.prt.5`. Earlier revisions are kept because they are the design history;
+only the STL and 3MF exports are what you print.
+
 ## Power — read this part
 
 **Do not power the servos from the Pi or from the ESP32.** MG90S stall current
