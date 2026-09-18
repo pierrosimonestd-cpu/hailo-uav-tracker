@@ -249,6 +249,16 @@ budget. Past that point the answer is a better detector, not a longer `max_age`.
 
 ## Reproducing everything
 
+Everything below, in order, is also available as one command:
+
+```bash
+python benchmarks/run_all.py --weights runs/train/uav_yolov8n/weights/best.pt
+```
+
+It skips any benchmark whose inputs are missing -- no Hailo device, no tracking
+subset, no checkpoint -- rather than failing, and regenerates the tables at the
+end. The individual scripts remain the interface:
+
 ```bash
 pip install -e ".[train,onnx,bench]"
 
