@@ -34,7 +34,7 @@ _No results yet. Run the benchmark to populate this table._
 below 32×32 pixels, and an aggregate AP can look respectable while the model has
 stopped seeing distant targets — which are the ones worth detecting early.
 
-### Quantisation
+### Quantisation, and how it fails
 
 The Hailo-8L is an INT8 accelerator, so the model that runs on the turret is not
 the model that was trained. Reporting only FP32 numbers would be reporting a
@@ -42,14 +42,42 @@ model this project does not run.
 
 Compiling a HEF needs the Hailo Dataflow Compiler, which requires a developer
 account and does not run in CI. Static INT8 quantisation through ONNX Runtime
-does run anywhere, and shares the mechanism that matters: per-tensor affine
-quantisation calibrated on a sample of training images. It is a **proxy** for
-the Hailo quantiser, not a substitute, and it is labelled as one in the table
-above (`-int8-onnx` tags).
+does run anywhere and shares the mechanisms that matter: affine quantisation,
+calibration on a sample of training images, and the same sensitivities. It is a
+**proxy** for the Hailo quantiser, not a substitute, and the `-int8-onnx` tags
+above say so.
+
+Getting it to work at all took three findings, each reproducible with
+`tools/quantize_onnx.py`:
+
+| Recipe | Result |
+|---|---|
+| Whole graph, per-tensor, MinMax | **zero detections** at any threshold |
+| Whole graph, per-channel, opset 11 | fails to load: `INVALID_GRAPH` |
+| Whole graph, per-channel, opset 13 | **zero detections** |
+| Whole graph, per-channel, percentile calibration | **zero detections** |
+| Convolutions only, decode tail left in FP32 | works |
+
+**Why the whole-graph recipes collapse.** The final `Concat` in the YOLOv8 head
+joins decoded box coordinates, which span 0 to 640 in pixel units, with class
+scores, which span 0 to 1. One quantisation scale has to cover both, and at
+uint8 that scale is roughly 2.5 units per level — so every class score rounds to
+zero. The model is not degraded, it is silenced, and silenced in a way that
+looks exactly like a working pipeline that happens to find nothing.
+
+**Why opset 11 cannot do per-channel.** Opset 11's `QuantizeLinear` has no
+`axis` attribute, so the graph is invalid. It surfaces as `INVALID_GRAPH` at
+session creation, naming nothing relevant. `tools/export_onnx.py` therefore
+exports opset 13, which the Hailo compiler also accepts.
+
+**The fix.** Quantise the convolutions and keep the head's decode tail — 24
+cheap element-wise nodes — in floating point. All the compute is in the
+convolutions, so the model is still 3.5× smaller. Hailo's compiler runs its own
+mixed-precision analysis for the same reason, which is part of why the HEF is
+the measurement that ultimately counts.
 
 For scale, Hailo's own published float-to-hardware gap on COCO is 0.6–1.5 mAP
-points for the YOLOv8/YOLO11 family (§4), which is the right order of magnitude
-to expect.
+points for the YOLOv8/YOLO11 family (§4).
 
 ---
 

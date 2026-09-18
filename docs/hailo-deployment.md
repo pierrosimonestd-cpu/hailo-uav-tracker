@@ -78,7 +78,11 @@ bash tools/compile_hailo.sh models/uav_yolov8n_640.onnx models/calibration.npy
 
 ### Things that will bite you
 
-**Opset.** The DFC parses opsets 11–13 reliably. `tools/export_onnx.py` pins 11.
+**Opset.** The DFC parses opsets 11–13 reliably. `tools/export_onnx.py` pins
+**13**, not 11: opset 11's `QuantizeLinear` has no `axis` attribute, so the INT8
+study in [benchmarks.md](benchmarks.md) cannot use per-channel weights and fails
+at load with `INVALID_GRAPH`. Opset 13 satisfies both the compiler and the
+quantiser, so one export serves both paths.
 
 **End node names.** The parser needs to be told where the graph ends, because
 the NMS node is attached by the compiler rather than exported. The defaults in
