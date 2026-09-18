@@ -113,6 +113,23 @@ IoU sweep (0.50:0.95). Two choices worth stating:
   collapses every metric in proportion to the subset size. (This was a real bug
   during development: it made a working model look like it had an AP of 0.024.)
 
+## The tracking subset
+
+The same benchmark ships 20 annotated video sequences, used by
+`benchmarks/eval_tracking.py`:
+
+```bash
+python tools/fetch_dut_antiuav.py --out data/dut_antiuav_tracking --splits tracking
+python benchmarks/eval_tracking.py --model runs/train/uav_yolov8n/weights/best.pt
+```
+
+Worth stating plainly: **this is a harder task than the single-object-tracking
+baselines published with the dataset.** A SOT tracker is handed the ground-truth
+box in frame one and only has to follow it. This pipeline is never told where
+the target is -- it detects, associates and picks a primary target with no
+initialisation. The numbers are therefore not comparable to a SOT leaderboard
+and are not presented as if they were.
+
 ## Bird discrimination
 
 Birds are the canonical false positive for ground-to-air UAV detection: similar
