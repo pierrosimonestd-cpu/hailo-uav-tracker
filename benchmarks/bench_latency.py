@@ -146,9 +146,12 @@ def main() -> int:
         detections = detector.infer(frame)
         timings["inference"].append((time.perf_counter() - start) * 1000.0)
 
-        # Whatever the backend does after the model call is already inside the
-        # inference figure; this records the host-side share explicitly as zero
-        # when NMS ran on chip.
+        # Decode and NMS are inside the backend's infer() call, so they are
+        # already counted in the inference figure and cannot be split out
+        # without instrumenting each backend. The one case worth recording is a
+        # HEF with NMS compiled onto the device: there the host-side share is
+        # genuinely zero, which is the whole point of compiling it that way.
+        # Anything else is left unrecorded rather than guessed at.
         timings["postprocess"].append(
             0.0 if getattr(detector, "nms_on_chip", False) else float("nan")
         )
@@ -188,6 +191,11 @@ def main() -> int:
         "frames": args.frames,
         "synthetic_frames": synthetic,
         "stages_ms": stage_summary,
+        "postprocess_note": (
+            "Decode and NMS run inside the backend's infer() call and are counted in "
+            "the inference figure. A zero row here means the HEF ran NMS on the device; "
+            "an absent row means the split was not measurable, not that it was free."
+        ),
         "end_to_end_ms": total_summary,
         "throughput_fps": round(1000.0 / total_summary["median"], 2) if total_summary else None,
         "host": {
@@ -216,6 +224,9 @@ def main() -> int:
         f"{'end to end':<12}{total_summary['median']:9.2f}{total_summary['p95']:9.2f}"
         f"{total_summary['p99']:9.2f}{total_summary['max']:9.2f}"
     )
+    if "postprocess" not in stage_summary or not stage_summary["postprocess"]:
+        print("
+(decode and NMS are inside the inference figure for this backend)")
     print(f"\nthroughput  {payload['throughput_fps']} fps (median)")
     print(f"wrote {path}")
     return 0
