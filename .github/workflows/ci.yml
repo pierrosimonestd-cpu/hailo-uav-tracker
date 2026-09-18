@@ -70,7 +70,7 @@ jobs:
         run: |
           pip install -e .
           python - <<'EOF'
-          import subprocess, sys
+          import sys
           sys.path.insert(0, "src")
           from uavtrack.io.protocol import crc8
           # The C++ test pins these; assert the Python side agrees, so the two
