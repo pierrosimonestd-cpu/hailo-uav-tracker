@@ -159,7 +159,7 @@ Measured effect (steady state, five seeds, circular target):
 | 4.7 °/s | 1.02° | 0.34° | 67% |
 | 9.4 °/s | 1.93° | 0.41° | 79% |
 | 14.1 °/s | 2.89° | 0.83° | 71% |
-| 18.8 °/s | 3.81° | 1.36° | 64% |
+| 18.9 °/s | 3.81° | 1.36° | 64% |
 | 28.3 °/s | 5.48° | 2.86° | 48% |
 
 Feed-forward removes roughly two thirds of the pointing error on a moving
