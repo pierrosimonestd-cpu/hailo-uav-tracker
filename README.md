@@ -230,6 +230,44 @@ byte dropped on the serial link, a frame missed by the detector, an integrator
 charging against a travel limit. Two real bugs found this way are documented in
 [control-design.md](docs/control-design.md) §6 and [dataset.md](docs/dataset.md).
 
+## What this does not do
+
+Stated plainly, because a project's honesty is in what it admits rather than
+what it claims.
+
+**The on-device numbers are not mine.** The Hailo-8L throughput figures in
+[benchmarks.md](docs/benchmarks.md) §5 are Hailo's published Model Zoo results
+on COCO, measured on an Intel host, and are attributed as such. The Hailo
+backend is written against the HailoRT async API and the compile flow is
+scripted end to end, but this repository contains no measurement taken on an
+actual Hailo-8L. Run `benchmarks/bench_latency.py` on your own board and the
+tables will fill in.
+
+**The pointing results are simulation.** A rate-limited servo model with
+transport delay, documented in [`plant.py`](src/uavtrack/control/plant.py). It
+does not model backlash, stiction, boresight misalignment or a flexing 3D-printed
+yoke — [control-design.md](docs/control-design.md) §9 lists the omissions. It is
+how you decide what to take to the hardware, not a substitute for doing so.
+
+**The INT8 study is a proxy.** ONNX Runtime static quantisation shares the
+mechanisms that matter with the Hailo quantiser, but it is not that quantiser.
+
+**Monocular, so no range.** Everything is angular. Two targets on the same
+bearing at different distances are indistinguishable, which is simply true of
+one camera.
+
+**One target at a time.** The tracker follows several; the turret points at one,
+chosen with hysteresis and a dwell time. No multi-target scheduling.
+
+**Visible light only.** No thermal channel, so no night capability and a hard
+time against a bright overcast sky.
+
+**The servo model is unidentified.** `tau_s` and `delay_s` in
+[`plant.py`](src/uavtrack/control/plant.py) are placeholders; the slew rate is
+the MG90S datasheet figure. Until you identify your own, keep
+`feedforward_gain` at 0.9 rather than 1.0 — the feed-forward is only as good as
+that model.
+
 ## Credits and licence
 
 MIT, see [LICENSE](LICENSE).
