@@ -4,9 +4,12 @@
 The export settings here are chosen for what happens *downstream*, and the
 non-obvious ones are worth stating:
 
-* ``opset=11``. The Hailo Dataflow Compiler parses opsets 11-13 reliably;
+* ``opset=13``. The Hailo Dataflow Compiler parses opsets 11-13 reliably;
   newer opsets introduce operators its parser rejects or lowers inefficiently.
-  ONNX Runtime is happy with 11, so one export serves both.
+  13 rather than 11 because opset 11's ``QuantizeLinear`` has no ``axis``
+  attribute, so per-channel INT8 quantisation produces an invalid graph -- see
+  tools/quantize_onnx.py. One export serves both the compiler and the INT8
+  study.
 * ``nms=False``. Hailo attaches its own NMS node during compilation, running it
   on the NPU. Exporting with NMS baked in would either fail to compile or push
   NMS onto the Pi's CPU, which is the resource this project is trying to
@@ -27,7 +30,7 @@ import shutil
 import sys
 from pathlib import Path
 
-OPSET = 11
+OPSET = 13
 
 
 def main() -> int:

@@ -8,13 +8,31 @@ project that reports only its FP32 numbers is reporting a model it does not run.
 
 Compiling a HEF needs the Hailo Dataflow Compiler, which needs a developer-zone
 login and does not run in CI. Static INT8 quantisation through ONNX Runtime is
-the closest thing that *does* run anywhere: same per-tensor affine scheme, same
+the closest thing that *does* run anywhere: same affine scheme, same
 calibration-set dependence, same failure modes. It is a proxy for the Hailo
 quantiser, not a substitute, and docs/benchmarks.md labels it as one.
 
 Calibration images are drawn from the *training* split. Using test images to
 calibrate would leak the test set into the model and inflate every number that
 follows.
+
+Two things about quantising a YOLOv8 head, both learned the hard way:
+
+**Quantising the whole graph destroys the model.** Not "loses a point of mAP" --
+it produces zero detections at any threshold. The final ``Concat`` in the head
+joins decoded box coordinates, which span 0 to 640 in pixel units, with class
+scores, which span 0 to 1. One quantisation scale has to cover both, and at
+uint8 that scale is about 2.5 units per level, so every class score rounds to
+zero. Excluding the head's *decode tail* -- the cheap element-wise ops after the
+feature convolutions -- from quantisation fixes it. All the real compute is in
+the convolutions, which stay INT8, so the saving is essentially unchanged.
+Hailo's compiler does its own mixed-precision analysis for the same reason.
+
+**Per-channel weights need opset 13 or newer.** Opset 11's ``QuantizeLinear``
+has no ``axis`` attribute, so a per-channel model is an invalid graph and fails
+at load with ``INVALID_GRAPH`` rather than anything that names the real cause.
+``tools/export_onnx.py`` exports opset 13, which the Hailo Dataflow Compiler
+also accepts.
 
 Usage:
     python tools/quantize_onnx.py --model models/uav_yolov8n_640.onnx \\
@@ -34,6 +52,13 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 
 from uavtrack.detect.preprocess import letterbox  # noqa: E402
+
+#: Name prefix of the detection head in an Ultralytics YOLOv8 export.
+DEFAULT_HEAD_PREFIX = "/model.22/"
+
+#: Feature-convolution sub-blocks inside the head. Everything else under the
+#: head prefix is decode arithmetic and is excluded from quantisation.
+FEATURE_BLOCKS = ("cv2.", "cv3.")
 
 
 class LetterboxCalibrationReader:
@@ -66,6 +91,37 @@ class LetterboxCalibrationReader:
         self._iterator = iter(self.paths)
 
 
+def find_decode_tail(model_path: Path, head_prefix: str = DEFAULT_HEAD_PREFIX) -> list[str]:
+    """Names of the head nodes that must stay in floating point.
+
+    The head contains two kinds of node: the ``cv2.*`` / ``cv3.*`` convolution
+    blocks that produce box-distribution and class features, and the decode
+    arithmetic that turns them into boxes -- reshapes, the DFL softmax and
+    convolution, the anchor arithmetic, and the final concatenation. The second
+    group is what cannot share a quantisation scale.
+
+    Args:
+        model_path: ONNX graph to inspect.
+        head_prefix: Node-name prefix of the detection head.
+
+    Returns:
+        Node names to pass as ``nodes_to_exclude``. Empty if the prefix matches
+        nothing, which means the export is not laid out as expected.
+    """
+    import onnx
+
+    graph = onnx.load(str(model_path)).graph
+    excluded = []
+    for node in graph.node:
+        if not node.name.startswith(head_prefix):
+            continue
+        suffix = node.name[len(head_prefix) :]
+        if suffix.startswith(FEATURE_BLOCKS):
+            continue  # real compute: keep it quantised
+        excluded.append(node.name)
+    return excluded
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -76,13 +132,20 @@ def main() -> int:
     parser.add_argument("--calib-images", type=int, default=200)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
-        "--per-channel",
+        "--per-tensor",
+        action="store_true",
+        help="per-tensor weight quantisation instead of per-channel; smaller and less accurate",
+    )
+    parser.add_argument(
+        "--quantize-head",
         action="store_true",
         help=(
-            "per-channel weight quantisation; more accurate, and what the Hailo "
-            "compiler does by default"
+            "also quantise the head's decode tail. Documented because it is the "
+            "obvious thing to do and it produces a model that detects nothing; "
+            "see this module's docstring"
         ),
     )
+    parser.add_argument("--head-prefix", default=DEFAULT_HEAD_PREFIX)
     args = parser.parse_args()
 
     if not args.model.exists():
@@ -122,6 +185,18 @@ def main() -> int:
     prepared = args.model.with_suffix(".prep.onnx")
     quant_pre_process(str(args.model), str(prepared), skip_symbolic_shape=False)
 
+    excluded: list[str] = []
+    if not args.quantize_head:
+        excluded = find_decode_tail(prepared, args.head_prefix)
+        if excluded:
+            print(f"keeping {len(excluded)} decode nodes in floating point")
+        else:
+            print(
+                f"warning: no nodes matched {args.head_prefix!r}. If this export is not a "
+                "stock Ultralytics YOLOv8 graph, pass --head-prefix, or the quantised "
+                "model may produce no detections at all."
+            )
+
     reader = LetterboxCalibrationReader(images, input_name, (width, height))
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -132,8 +207,9 @@ def main() -> int:
         quant_format=QuantFormat.QDQ,
         activation_type=QuantType.QUInt8,
         weight_type=QuantType.QInt8,
-        per_channel=args.per_channel,
+        per_channel=not args.per_tensor,
         calibrate_method=CalibrationMethod.MinMax,
+        nodes_to_exclude=excluded,
     )
     prepared.unlink(missing_ok=True)
 
