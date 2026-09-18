@@ -1,0 +1,40 @@
+{
+  "tag": "yolov8n-negatives",
+  "kind": "measured",
+  "generated_utc": "2026-09-18T14:18:32+00:00",
+  "model": "runs/train/uav_yolov8n_negatives/weights/best.pt",
+  "backend": "ultralytics:cpu",
+  "input_size": [
+    640,
+    640
+  ],
+  "dataset": "data\\dut_antiuav\\coco\\test.json",
+  "images": 2200,
+  "eval_conf_threshold": 0.001,
+  "metrics": {
+    "AP": 0.50332,
+    "AP50": 0.86487,
+    "AP75": 0.51385,
+    "AP_small": 0.35605,
+    "AP_medium": 0.55882,
+    "AP_large": 0.65688,
+    "AR_1": 0.54419,
+    "AR_10": 0.57728,
+    "AR_100": 0.57889,
+    "AR_small": 0.43809,
+    "AR_medium": 0.62249,
+    "AR_large": 0.72674
+  },
+  "latency_ms": {
+    "mean": 68.46,
+    "median": 64.41,
+    "p95": 93.94,
+    "min": 44.338
+  },
+  "wall_seconds": 182.2,
+  "host": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python": "3.12.6"
+  }
+}

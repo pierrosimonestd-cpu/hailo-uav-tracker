@@ -32,6 +32,7 @@ python benchmarks/eval_detection.py \
 | `yolov8n-fp32-onnx` | onnx:cpu | 0.556 | 0.894 | 0.585 | 0.418 | 0.578 | 0.717 | 2200 |
 | `yolov8n-fp32-pytorch` | ultralytics:cpu | 0.543 | 0.886 | 0.574 | 0.395 | 0.567 | 0.713 | 2200 |
 | `yolov8n-int8-onnx` | onnx:cpu | 0.518 | 0.875 | 0.522 | 0.358 | 0.536 | 0.709 | 2200 |
+| `yolov8n-negatives` | ultralytics:cpu | 0.503 | 0.865 | 0.514 | 0.356 | 0.559 | 0.657 | 2200 |
 <!-- END GENERATED: detection -->
 
 `AP_S` is the column to read first. Over half the objects in this dataset are
@@ -287,11 +288,78 @@ python benchmarks/eval_hard_negatives.py --model runs/train/uav_yolov8n/weights/
 | Model | Bird images | Threshold | False-positive rate | Threshold for 1% |
 | ---: | ---: | ---: | ---: | ---: |
 | `yolov8n-fp32-pytorch` | 593 | 0.35 | 23.44% | 0.9 |
+| `yolov8n-negatives` | 593 | 0.35 | 7.08% | 0.7 |
 <!-- END GENERATED: hard-negatives -->
 
 The metric is the fraction of bird images that produce at least one UAV
 detection at the deployed threshold — that is, how often the turret would swing
 onto a pigeon.
+
+### Fixing it: birds as training background
+
+`tools/add_hard_negatives.py` fetches bird photographs and installs them as
+background images -- an empty label file, so any detection on them becomes loss.
+Four epochs of fine-tuning on top of the existing weights:
+
+```bash
+python tools/add_hard_negatives.py --count 600
+python tools/train_uav.py --data data/dut_antiuav/dut_antiuav_negatives.yaml     --model runs/train/uav_yolov8n/weights/best.pt --epochs 4 --close-mosaic 2
+```
+
+The negatives are drawn from the Open Images **train** split while the benchmark
+scores the **validation** split, so the two are disjoint by construction; the
+script refuses to run otherwise, and the two image sets were also checked for
+overlap by filename. Training on the images you are about to be scored on is an
+easy mistake to make and produces a spectacular, meaningless result.
+
+The headline: **the false-positive rate on birds falls from 23.4% to 7.1%** at
+the operating threshold. Taken alone that number is worthless, because raising
+the confidence threshold achieves the same thing for free. Worse, the fine-tuned
+model is *behind* on the drone benchmark -- AP 0.543 to 0.503, AP50 0.886 to
+0.865. Read those two facts together and the obvious conclusion is that the
+model simply became timid.
+
+It did not, and the way to tell is to compare at **matched bird false-positive
+rates**:
+
+```bash
+python benchmarks/analyse_negatives_tradeoff.py
+```
+
+<!-- BEGIN GENERATED: negatives-tradeoff -->
+| Target bird FP | Baseline thr / actual | Recall | With negatives thr / actual | Recall | &Delta; |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 10.0% | 0.60 / 9.9% | 0.713 | 0.25 / 9.6% | **0.821** | +15% |
+| 6.0% | 0.70 / 5.7% | 0.600 | 0.40 / 5.2% | **0.783** | +31% |
+| 3.5% | 0.80 / 2.2% | 0.360 | 0.60 / 2.0% | **0.661** | +83% |
+| 2.0% | 0.90 / 0.2% | 0.033 | 0.70 / 0.8% | **0.485** | +1392% &dagger; |
+
+&dagger; the two models' actual bird rates differ by more than 1.5x here, so this row is not a matched comparison and its relative gain is overstated.
+<!-- END GENERATED: negatives-tradeoff -->
+
+At every operating point, with birds suppressed equally hard or harder, the
+fine-tuned model finds substantially more drones. The baseline needs a
+confidence of 0.70 to get birds down to 5.7%, and at 0.70 it has lost 40% of the
+drones; the fine-tuned model reaches a *lower* bird rate at 0.40, where it still
+sees 78%.
+
+So why is its AP lower? Because AP integrates the whole precision-recall curve,
+including the low-confidence tail no deployment operates in. The fine-tuned
+model is worse there and better everywhere a turret would actually be set. AP is
+the right summary for a detector in general and the wrong one for this decision.
+
+Two caveats on the result:
+
+- **Four epochs on CPU is a small budget** for absorbing 600 new images, 10% of
+  the training set. A full training run with the negatives included from the
+  start would very likely beat both models rather than trading against one.
+- **Bird photographs are not birds in flight against sky.** Open Images contains
+  perched birds, close-ups and birds indoors. The rate measured here is a proxy
+  for the deployment case, better than no measurement and not the same thing.
+
+Both models are kept. Which one to deploy depends on whether false alarms or
+missed drones cost more, and that is an application question, not a benchmark
+one.
 
 ---
 

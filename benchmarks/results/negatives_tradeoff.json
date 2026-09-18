@@ -1,0 +1,89 @@
+{
+  "kind": "measured",
+  "generated_utc": "2026-09-18T21:03:57+00:00",
+  "note": "Bird false-positive rates come from Open Images; drone recall from the DUT Anti-UAV test split. Each model is scored at the lowest confidence threshold reaching the target bird rate, so neither is compared at a laxer setting than the other.",
+  "iou_match": 0.5,
+  "ground_truth_objects": 2245,
+  "comparisons": [
+    {
+      "target_fp_rate": 0.1,
+      "models": {
+        "baseline": {
+          "threshold": 0.6,
+          "bird_fp_rate": 0.09949,
+          "drone_recall": 0.7126948775055679,
+          "drone_precision": 0.9815950920245399
+        },
+        "with-negatives": {
+          "threshold": 0.25,
+          "bird_fp_rate": 0.09612,
+          "drone_recall": 0.820935412026726,
+          "drone_precision": 0.8920619554695063
+        }
+      },
+      "recall_delta": 0.10824053452115812,
+      "recall_relative": 0.15187499999999998
+    },
+    {
+      "target_fp_rate": 0.06,
+      "models": {
+        "baseline": {
+          "threshold": 0.7,
+          "bird_fp_rate": 0.05734,
+          "drone_recall": 0.6,
+          "drone_precision": 0.9868131868131869
+        },
+        "with-negatives": {
+          "threshold": 0.4,
+          "bird_fp_rate": 0.05228,
+          "drone_recall": 0.7830734966592428,
+          "drone_precision": 0.9406099518459069
+        }
+      },
+      "recall_delta": 0.18307349665924277,
+      "recall_relative": 0.3051224944320713
+    },
+    {
+      "target_fp_rate": 0.035,
+      "models": {
+        "baseline": {
+          "threshold": 0.8,
+          "bird_fp_rate": 0.02192,
+          "drone_recall": 0.3603563474387528,
+          "drone_precision": 0.995079950799508
+        },
+        "with-negatives": {
+          "threshold": 0.6,
+          "bird_fp_rate": 0.02024,
+          "drone_recall": 0.6610244988864142,
+          "drone_precision": 0.9769585253456221
+        }
+      },
+      "recall_delta": 0.30066815144766146,
+      "recall_relative": 0.8343634116192831
+    },
+    {
+      "target_fp_rate": 0.02,
+      "models": {
+        "baseline": {
+          "threshold": 0.9,
+          "bird_fp_rate": 0.00169,
+          "drone_recall": 0.032516703786191536,
+          "drone_precision": 1.0
+        },
+        "with-negatives": {
+          "threshold": 0.7,
+          "bird_fp_rate": 0.00843,
+          "drone_recall": 0.48507795100222717,
+          "drone_precision": 0.9918032786885246
+        }
+      },
+      "recall_delta": 0.45256124721603563,
+      "recall_relative": 13.917808219178083
+    }
+  ],
+  "host": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.6"
+  }
+}

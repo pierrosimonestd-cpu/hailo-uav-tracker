@@ -212,6 +212,66 @@ def hard_negative_table(results_dir: Path) -> str:
     )
 
 
+def negatives_tradeoff_table(results_dir: Path) -> str:
+    """Drone recall at matched bird false-positive rates.
+
+    The actual bird rate each model reaches is printed next to the target it was
+    asked for, because the two are not always equal -- the sweep is on a grid of
+    thresholds, and a model can overshoot. Hiding that would make the comparison
+    look tidier than it is.
+    """
+    path = results_dir / "negatives_tradeoff.json"
+    if not path.exists():
+        return "_No results yet. Run the benchmark to populate this table._"
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    rows = []
+    for entry in payload["comparisons"]:
+        models = entry["models"]
+        if len(models) != 2:
+            continue
+        base, tuned = models["baseline"], models["with-negatives"]
+        # The threshold grid is coarse, so a model can land well under the
+        # target and the pair stops being a fair match. Where the two actual
+        # rates are more than 1.5x apart the relative gain is inflated by the
+        # mismatch, and saying so beats printing a headline number that a
+        # careful reader would have to catch.
+        base_rate = max(base["bird_fp_rate"], 1e-9)
+        tuned_rate = max(tuned["bird_fp_rate"], 1e-9)
+        spread = max(base_rate, tuned_rate) / min(base_rate, tuned_rate)
+        matched = spread <= 1.5
+        delta = f"{entry['recall_relative'] * 100:+.0f}%"
+        rows.append(
+            [
+                f"{entry['target_fp_rate'] * 100:.1f}%",
+                f"{base['threshold']:.2f} / {base['bird_fp_rate'] * 100:.1f}%",
+                f"{base['drone_recall']:.3f}",
+                f"{tuned['threshold']:.2f} / {tuned['bird_fp_rate'] * 100:.1f}%",
+                f"**{tuned['drone_recall']:.3f}**",
+                delta if matched else f"{delta} &dagger;",
+            ]
+        )
+    body = table(
+        [
+            "Target bird FP",
+            "Baseline thr / actual",
+            "Recall",
+            "With negatives thr / actual",
+            "Recall",
+            "&Delta;",
+        ],
+        rows,
+        align="---:",
+    )
+    footnote = (
+        "&dagger; the two models' actual bird rates differ by more than 1.5x here, so "
+        "this row is not a matched comparison and its relative gain is overstated."
+    )
+    if any("&dagger;" in row[-1] for row in rows):
+        return f"{body}\n\n{footnote}"
+    return body
+
+
 def tracking_table(results_dir: Path) -> str:
     payloads = load(results_dir, "tracking_*.json")
     rows = []
@@ -376,6 +436,7 @@ def main() -> int:
         "preprocessing-ablation": preprocessing_ablation_table(args.results),
         "resize-by-resolution": resize_by_resolution_table(args.results),
         "hard-negatives": hard_negative_table(args.results),
+        "negatives-tradeoff": negatives_tradeoff_table(args.results),
         "tracking": tracking_table(args.results),
         "readme-latency": readme_latency_table(args.results),
         "readme-feedforward": readme_feedforward_table(args.results),

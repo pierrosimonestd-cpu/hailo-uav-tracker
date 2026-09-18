@@ -75,6 +75,7 @@ is written up with the wrong answers included:
 | `yolov8n-fp32-onnx` | onnx:cpu | 0.556 | 0.894 | 0.585 | 0.418 | 0.578 | 0.717 | 2200 |
 | `yolov8n-fp32-pytorch` | ultralytics:cpu | 0.543 | 0.886 | 0.574 | 0.395 | 0.567 | 0.713 | 2200 |
 | `yolov8n-int8-onnx` | onnx:cpu | 0.518 | 0.875 | 0.522 | 0.358 | 0.536 | 0.709 | 2200 |
+| `yolov8n-negatives` | ultralytics:cpu | 0.503 | 0.865 | 0.514 | 0.356 | 0.559 | 0.657 | 2200 |
 <!-- END GENERATED: detection -->
 
 Read `AP_S` first: **52% of the objects in this dataset are smaller than 32×32
@@ -103,7 +104,7 @@ harder task than the single-object-tracking baselines published with the
 dataset and is not compared against them. *Recall* keeps the rest honest: a
 tracker can post a good success curve while answering on a third of the frames.
 
-### Bird discrimination — the weakest result here
+### Bird discrimination — the weakest result, and what fixing it costs
 
 DUT Anti-UAV contains no birds, so a model trained on it alone has never been
 told that a bird is not a drone. Measured against 593 bird photographs from
@@ -113,15 +114,42 @@ Open Images V7, with aircraft classes excluded:
 | Model | Bird images | Threshold | False-positive rate | Threshold for 1% |
 | ---: | ---: | ---: | ---: | ---: |
 | `yolov8n-fp32-pytorch` | 593 | 0.35 | 23.44% | 0.9 |
+| `yolov8n-negatives` | 593 | 0.35 | 7.08% | 0.7 |
 <!-- END GENERATED: hard-negatives -->
 
-**Close to one bird image in four triggers a UAV detection** at the deployed
-threshold. Suppressing that to 1% needs a confidence threshold of 0.9, which
-would discard most true detections as well. This is the number to fix next, and
-the fix is training data rather than tuning: birds as labelled negatives. It is
-reported here at full strength because a turret that swings onto every passing
-pigeon is the actual failure mode of this class of system, and a benchmark table
-that omits it would be describing a different project.
+**Close to one bird image in four triggers a UAV detection** on the baseline
+model, which has never been shown a bird and told it is not a drone. Adding 600
+bird photographs to training as background images and fine-tuning for four
+epochs takes that to 7%.
+
+That second number means nothing on its own — raising the confidence threshold
+suppresses birds too, for free. And the fine-tuned model is *behind* on the
+drone benchmark: AP 0.543 to 0.503. The obvious reading is that it just became
+timid.
+
+It did not. Compared at matched bird false-positive rates, it finds
+substantially more drones at every operating point:
+
+<!-- BEGIN GENERATED: negatives-tradeoff -->
+| Target bird FP | Baseline thr / actual | Recall | With negatives thr / actual | Recall | &Delta; |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 10.0% | 0.60 / 9.9% | 0.713 | 0.25 / 9.6% | **0.821** | +15% |
+| 6.0% | 0.70 / 5.7% | 0.600 | 0.40 / 5.2% | **0.783** | +31% |
+| 3.5% | 0.80 / 2.2% | 0.360 | 0.60 / 2.0% | **0.661** | +83% |
+| 2.0% | 0.90 / 0.2% | 0.033 | 0.70 / 0.8% | **0.485** | +1392% &dagger; |
+
+&dagger; the two models' actual bird rates differ by more than 1.5x here, so this row is not a matched comparison and its relative gain is overstated.
+<!-- END GENERATED: negatives-tradeoff -->
+
+The baseline needs confidence 0.70 to get birds to 5.7%, and there it has lost
+40% of the drones. The fine-tuned model reaches a lower bird rate at 0.40, where
+it still sees 78%. Its AP is lower because AP integrates the whole
+precision-recall curve including the low-confidence tail no turret operates in —
+the right summary for a detector in general, the wrong one for this decision.
+
+Both checkpoints are kept, because which to deploy depends on whether false
+alarms or missed drones cost more, and that is not a benchmark question.
+[Method, caveats and the disjoint-split check](docs/benchmarks.md#fixing-it-birds-as-training-background).
 
 ### Predictions
 
@@ -302,10 +330,13 @@ how you decide what to take to the hardware, not a substitute for doing so.
 **The INT8 study is a proxy.** ONNX Runtime static quantisation shares the
 mechanisms that matter with the Hailo quantiser, but it is not that quantiser.
 
-**It confuses birds with drones.** 23% of bird images produce a detection at the
-operating threshold, measured above. Trained on a benchmark with no birds in it,
-the model has no reason to do otherwise. Treat the detector as untuned for
-cluttered airspace until it has seen labelled negatives.
+**Bird discrimination is improved, not solved.** The fine-tuned checkpoint still
+fires on 7% of bird images, and the training and evaluation negatives are both
+Open Images photographs — perched birds, close-ups, birds indoors — not birds in
+flight against sky at range, which is the case that matters. The measurement is
+a proxy, better than none and not the real thing. Four CPU epochs is also a small
+budget for 600 new images; training with them included from the start would
+likely beat both checkpoints rather than trading against one.
 
 **The resize-kernel gain does not apply to the shipped configuration.** The
 `INTER_AREA` preprocessing is worth about two points of `AP_small` on the
