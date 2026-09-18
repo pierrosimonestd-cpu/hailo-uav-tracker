@@ -34,6 +34,14 @@ DRIVE_IDS = {
     "test": "1L1zeW1EMDLlXHClSDcCjl3rs_A6sVai0",
 }
 
+# The tracking subset ships as two archives, frames and annotations, rather than
+# one per split. It is fetched separately because it feeds a different benchmark
+# (benchmarks/eval_tracking.py) and most users will not want the extra gigabyte.
+TRACKING_DRIVE_IDS = {
+    "img": "1dlSPDggg6TRFMcC1jlYIJxxzUQS1mIh9",
+    "gt": "16PE3tBhT0lUGZLA8-zIRYvNUvxfhFZJq",
+}
+
 # Image counts stated in the paper; used as an integrity check after extraction.
 EXPECTED_IMAGES = {"train": 5200, "val": 2600, "test": 2200}
 
@@ -96,6 +104,41 @@ def verify_split(out_dir: Path, split: str) -> bool:
     return ok
 
 
+def fetch_tracking(out_dir: Path, keep_archives: bool) -> bool:
+    """Fetch and extract the 20 annotated tracking sequences.
+
+    Two archives rather than one per split: frames and ground truth are
+    published separately.
+    """
+    try:
+        import gdown
+    except ImportError:  # pragma: no cover - environment dependent
+        sys.exit("gdown is required: pip install 'uavtrack[bench]'")
+
+    archive_dir = out_dir / ".archives"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    for name, drive_id in TRACKING_DRIVE_IDS.items():
+        archive = archive_dir / f"{name}.zip"
+        if not archive.exists():
+            print(f"[get ] tracking {name}: downloading from Google Drive ...")
+            gdown.download(id=drive_id, output=str(archive), quiet=False)
+        if not archive.exists():
+            sys.exit(f"download of tracking {name} failed; see the Baidu mirror in the README")
+
+        print(f"[open] extracting {archive.name} ...")
+        with zipfile.ZipFile(archive) as zf:
+            zf.extractall(out_dir)
+        if not keep_archives:
+            archive.unlink(missing_ok=True)
+
+    sequences = sorted(out_dir.rglob("groundtruth*.txt"))
+    frames = sum(1 for _ in out_dir.rglob("*.jpg"))
+    status = "ok  " if sequences and frames else "WARN"
+    print(f"[{status}] tracking: {len(sequences)} sequences, {frames} frames")
+    return bool(sequences and frames)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -107,8 +150,12 @@ def main() -> int:
         "--splits",
         nargs="+",
         default=["train", "val", "test"],
-        choices=sorted(DRIVE_IDS),
-        help="splits to fetch (the test split alone is enough to reproduce the benchmark table)",
+        choices=[*sorted(DRIVE_IDS), "tracking"],
+        help=(
+            "splits to fetch. The test split alone reproduces the detection table; "
+            "'tracking' fetches the 20 video sequences for benchmarks/eval_tracking.py "
+            "and should be given its own --out directory"
+        ),
     )
     parser.add_argument(
         "--keep-archives", action="store_true", help="do not delete the .zip files after extraction"
@@ -120,6 +167,9 @@ def main() -> int:
 
     all_ok = True
     for split in args.splits:
+        if split == "tracking":
+            all_ok &= fetch_tracking(args.out, args.keep_archives)
+            continue
         archive = download_split(split, archive_dir)
         extract_split(archive, args.out, split)
         all_ok &= verify_split(args.out, split)
@@ -127,7 +177,10 @@ def main() -> int:
             archive.unlink(missing_ok=True)
 
     print(f"\nDataset ready at {args.out}")
-    print("Next: python tools/prepare_dataset.py --root", args.out)
+    if "tracking" in args.splits:
+        print("Next: python benchmarks/eval_tracking.py --root", args.out)
+    else:
+        print("Next: python tools/prepare_dataset.py --root", args.out)
     return 0 if all_ok else 1
 
 
