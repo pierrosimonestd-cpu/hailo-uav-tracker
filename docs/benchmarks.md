@@ -227,9 +227,11 @@ python benchmarks/bench_latency.py --model models/uav_yolov8n_640.hef --frames 3
 ```
 
 <!-- BEGIN GENERATED: latency -->
-| Model | Backend | Inference (ms) | End to end (ms) | p95 | p99 | FPS |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `yolov8n-fp32-onnx` | onnx:cpu | 39.8 | 40.1 | 45.2 | 50.4 | 24.9 |
+| Model | Host | Backend | Inference (ms) | End to end (ms) | p95 | p99 | FPS |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `yolov8n-fp32-onnx-rpi5cpu` | Pi 5 CPU | onnx:cpu | 153.6 | 153.9 | 180.9 | 183.0 | 6.5 |
+| `yolov8n-int8-onnx-rpi5cpu` | Pi 5 CPU | onnx:cpu | 75.0 | 75.3 | 93.6 | 96.0 | 13.3 |
+| `yolov8n-fp32-onnx` | x86 desktop | onnx:cpu | 39.8 | 40.1 | 45.2 | 50.4 | 24.9 |
 <!-- END GENERATED: latency -->
 
 Quote the **p95**, not the mean. A control loop is hurt by the tail: one 200 ms
@@ -239,6 +241,41 @@ controller cannot know a frame is late until it arrives.
 
 `control.latency_s` in your config should be set from the median-to-p95 range
 measured on **your** hardware.
+
+### What that costs in degrees, on the real board
+
+The Raspberry Pi rows above were measured on the target hardware -- a Pi 5 with
+4 GB and Debian 13, over SSH, with 80 real frames from the test split rather
+than synthetic ones. Feeding each measured latency back into the closed-loop
+simulation gives the number the whole project is about:
+
+| Configuration | Inference | Steady-state pointing error |
+|---|---:|---:|
+| x86 desktop, FP32 | 40 ms | 0.82&deg; |
+| Pi 5 CPU, INT8 | 75 ms | 0.99&deg; |
+| Pi 5 CPU, FP32 | 154 ms | 1.41&deg; |
+
+```bash
+python -m uavtrack.cli simulate --trajectory circular --duration 20 --latency-ms 154
+```
+
+Three things follow, and none of them were assumptions.
+
+**The Pi 5 CPU runs this model at 6.5 fps in FP32.** Not unusable, but a
+153 ms sense-to-act delay costs 1.41&deg; of steady-state pointing error against
+0.82&deg; on a desktop -- a 72% increase from the processor alone.
+
+**INT8 halves the latency on CPU too.** 153.6 ms to 75.0 ms, a 2.05x speedup
+from quantisation before any accelerator is involved, and the pointing error
+falls to 0.99&deg;. That is most of the benefit of the exercise, available on a
+board with no NPU at all.
+
+**This is the gap the accelerator exists to close.** Hailo's published Model Zoo
+throughput for YOLOv8n on the Hailo-8L (&sect;5) is an order of magnitude faster
+than the Pi's CPU. At those latencies the simulation puts pointing error near
+its floor of about 0.68&deg;, where the servo's own lag rather than the vision
+pipeline sets the limit. The accelerator does not make the detector better; it
+moves the bottleneck off the detector.
 
 Watching the tail is not academic. This benchmark's first run reported a
 **1.8-second p99 on the tracking stage** against a 0.6 ms median -- a lazy

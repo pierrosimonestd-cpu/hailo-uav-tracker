@@ -86,9 +86,11 @@ distant targets, which are the ones worth detecting early.
 ### Latency
 
 <!-- BEGIN GENERATED: latency -->
-| Model | Backend | Inference (ms) | End to end (ms) | p95 | p99 | FPS |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `yolov8n-fp32-onnx` | onnx:cpu | 39.8 | 40.1 | 45.2 | 50.4 | 24.9 |
+| Model | Host | Backend | Inference (ms) | End to end (ms) | p95 | p99 | FPS |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `yolov8n-fp32-onnx-rpi5cpu` | Pi 5 CPU | onnx:cpu | 153.6 | 153.9 | 180.9 | 183.0 | 6.5 |
+| `yolov8n-int8-onnx-rpi5cpu` | Pi 5 CPU | onnx:cpu | 75.0 | 75.3 | 93.6 | 96.0 | 13.3 |
+| `yolov8n-fp32-onnx` | x86 desktop | onnx:cpu | 39.8 | 40.1 | 45.2 | 50.4 | 24.9 |
 <!-- END GENERATED: latency -->
 
 ### Tracking — DUT Anti-UAV sequences
@@ -313,13 +315,18 @@ charging against a travel limit. Two real bugs found this way are documented in
 Stated plainly, because a project's honesty is in what it admits rather than
 what it claims.
 
-**The on-device numbers are not mine.** The Hailo-8L throughput figures in
-[benchmarks.md](docs/benchmarks.md) §5 are Hailo's published Model Zoo results
-on COCO, measured on an Intel host, and are attributed as such. The Hailo
-backend is written against the HailoRT async API and the compile flow is
-scripted end to end, but this repository contains no measurement taken on an
-actual Hailo-8L. Run `benchmarks/bench_latency.py` on your own board and the
-tables will fill in.
+**No measurement here was taken on the Hailo NPU.** The board is real and
+verified — a Pi 5 with the AI HAT+, `hailortcli` reporting `Device
+Architecture: HAILO8L`, firmware 4.23.0 — and the latency table has real Pi 5
+**CPU** numbers measured over SSH on that board. But nothing in this repository
+has run on the accelerator itself, because compiling a `.hef` needs the Hailo
+Dataflow Compiler, which is x86_64 Linux only and behind a Developer Zone
+account. The Hailo-8L throughput figures in [benchmarks.md](docs/benchmarks.md)
+§5 remain Hailo's published Model Zoo results on COCO, measured on an Intel
+host, and are attributed as such. The backend is written against the HailoRT
+async API and the compile flow is scripted end to end; run
+`tools/compile_hailo.sh` on an x86 Linux box and then `benchmarks/bench_latency.py`
+on the Pi and those rows will fill in.
 
 **The pointing results are simulation.** A rate-limited servo model with
 transport delay, documented in [`plant.py`](src/uavtrack/control/plant.py). It

@@ -168,15 +168,34 @@ def resize_by_resolution_table(results_dir: Path) -> str:
     return f"{body}\n\n{footnote}"
 
 
+def host_label(payload: dict) -> str:
+    """Which machine a latency figure came from.
+
+    Worth a column of its own now that the same model is timed on a desktop and
+    on the Raspberry Pi: a table mixing the two without saying so invites the
+    reader to compare numbers that are four times apart for reasons having
+    nothing to do with the model.
+    """
+    platform = payload.get("host", {}).get("platform", "")
+    if "aarch64" in platform:
+        return "Pi 5 CPU"
+    if "Windows" in platform or "x86_64" in platform:
+        return "x86 desktop"
+    return platform.split("-")[0] or "unknown"
+
+
 def latency_table(results_dir: Path) -> str:
     payloads = load(results_dir, "latency_*.json")
     rows = []
-    for p in payloads:
+    # Slowest first: the interesting comparison is how far the accelerator has
+    # to close, not which configuration happens to sort first alphabetically.
+    for p in sorted(payloads, key=lambda p: -p["end_to_end_ms"]["median"]):
         e = p["end_to_end_ms"]
         inference = p["stages_ms"].get("inference", {})
         rows.append(
             [
                 f"`{p['tag']}`",
+                host_label(p),
                 p["backend"],
                 f"{inference.get('median', float('nan')):.1f}",
                 f"{e['median']:.1f}",
@@ -186,7 +205,16 @@ def latency_table(results_dir: Path) -> str:
             ]
         )
     return table(
-        ["Model", "Backend", "Inference (ms)", "End to end (ms)", "p95", "p99", "FPS"],
+        [
+            "Model",
+            "Host",
+            "Backend",
+            "Inference (ms)",
+            "End to end (ms)",
+            "p95",
+            "p99",
+            "FPS",
+        ],
         rows,
         align="---:",
     )

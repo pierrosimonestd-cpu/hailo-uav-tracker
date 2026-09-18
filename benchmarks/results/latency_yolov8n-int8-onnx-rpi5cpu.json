@@ -1,0 +1,68 @@
+{
+  "tag": "yolov8n-int8-onnx-rpi5cpu",
+  "kind": "measured",
+  "generated_utc": "2026-09-18T21:42:44+00:00",
+  "model": "models/uav_yolov8n_640.int8.onnx",
+  "backend": "onnx:cpu",
+  "input_size": [
+    640,
+    640
+  ],
+  "frame_size": [
+    1280,
+    720
+  ],
+  "frames": 120,
+  "synthetic_frames": false,
+  "stages_ms": {
+    "preprocess": {
+      "mean": 0.933,
+      "median": 0.895,
+      "p95": 1.052,
+      "p99": 1.076,
+      "min": 0.838,
+      "max": 3.4
+    },
+    "inference": {
+      "mean": 77.414,
+      "median": 75.006,
+      "p95": 93.161,
+      "p99": 95.303,
+      "min": 71.272,
+      "max": 96.842
+    },
+    "postprocess": {},
+    "track": {
+      "mean": 0.272,
+      "median": 0.284,
+      "p95": 0.405,
+      "p99": 0.51,
+      "min": 0.066,
+      "max": 0.564
+    },
+    "control": {
+      "mean": 0.007,
+      "median": 0.001,
+      "p95": 0.071,
+      "p99": 0.092,
+      "min": 0.0,
+      "max": 0.099
+    }
+  },
+  "postprocess_note": "Decode and NMS run inside the backend's infer() call and are counted in the inference figure. A zero row here means the HEF ran NMS on the device; an absent row means the split was not measurable, not that it was free.",
+  "end_to_end_ms": {
+    "mean": 77.699,
+    "median": 75.303,
+    "p95": 93.636,
+    "p99": 95.964,
+    "min": 71.554,
+    "max": 96.982
+  },
+  "throughput_fps": 13.28,
+  "host": {
+    "platform": "Linux-6.18.50+rpt-rpi-2712-aarch64-with-glibc2.41",
+    "processor": "",
+    "python": "3.13.5",
+    "cpu_count": 4
+  }
+}
