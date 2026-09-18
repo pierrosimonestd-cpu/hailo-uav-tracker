@@ -7,10 +7,12 @@ over a benchmark whose images arrive at four different resolutions, and the
 kernel choice does nothing at all for some of them.
 
 OpenCV's bilinear filter at an exact 2:1 downscale averages the same 2x2 block
-that ``INTER_AREA`` does, so the two kernels are bit-identical there. At 3:1 it
-samples two columns of every three and the results diverge sharply. DUT
-Anti-UAV is 61% 1920x1080 (3:1 into a 640 network) and 38% 1280x720 (exactly
-2:1), so the whole of the aggregate gain has to come from the former.
+that ``INTER_AREA`` does, so the two kernels agree there -- exactly on x86, and
+to within one intensity level on aarch64, where the NEON path rounds
+differently. At 3:1 it samples two columns of every three and the results
+diverge sharply. DUT Anti-UAV is 61% 1920x1080 (3:1 into a 640 network) and 38%
+1280x720 (exactly 2:1), so the whole of the aggregate gain has to come from the
+former.
 
 This script checks that rather than assuming it, by re-scoring the detections
 both runs already wrote. No inference: it is a regrouping of existing results.
@@ -130,7 +132,7 @@ def main() -> int:
             "Regrouping of detections already written by the two ablation runs; no "
             "inference was repeated. A zero delta at an exact 2:1 downscale is not "
             "noise: OpenCV's bilinear filter averages the same 2x2 block that "
-            "INTER_AREA does, so the kernels produce identical pixels there."
+            "INTER_AREA does, so the kernels agree there to within rounding."
         ),
         "runs": {label: str(path) for label, path in detection_files.items()},
         "min_images_for_a_claim": MIN_IMAGES_FOR_A_CLAIM,

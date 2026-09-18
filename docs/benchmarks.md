@@ -96,8 +96,10 @@ python benchmarks/analyse_resize_ablation.py
 Every point of the improvement comes from the 1920x1080 images. At 1280x720 the
 delta is not small, it is **exactly zero** -- because at an exact 2:1 downscale
 OpenCV's bilinear filter averages the same 2x2 block that `INTER_AREA` does and
-the two kernels produce bit-identical pixels. That is pinned by a test, not
-inferred.
+the two kernels produce bit-identical pixels on x86. On aarch64 -- what the Pi runs -- OpenCV's NEON path rounds differently and about a third of the pixels come out one level apart, which cannot change a detection but does mean "identical" is not a portable claim. That is pinned by a
+test on both architectures, not inferred -- and the test asserted plain
+bit-identity until it was first run on the Pi, where it failed for exactly this
+reason.
 
 The mechanism at 3:1 is not "area-averaging keeps more signal". Averaged over
 sub-pixel offsets both kernels pass the *same* total energy. The difference is

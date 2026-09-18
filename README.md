@@ -342,7 +342,8 @@ likely beat both checkpoints rather than trading against one.
 `INTER_AREA` preprocessing is worth about two points of `AP_small` on the
 benchmark, but all of that comes from its 1920×1080 images. At the 1280×720 the
 Pi config captures, the downscale to 640 is exactly 2:1, where OpenCV's bilinear
-filter is bit-identical to area-averaging and the gain is exactly zero. Capturing
+filter matches area-averaging to within one intensity level and the gain is
+zero. Capturing
 at 1080p might recover it; that has not been measured on hardware.
 [Details](docs/benchmarks.md#the-resize-kernel-and-a-correctness-proof).
 

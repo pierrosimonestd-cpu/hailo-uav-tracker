@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import math
 
 import pytest
@@ -253,13 +254,27 @@ def test_servo_rejects_a_non_positive_time_constant():
 
 
 # ------------------------------------------------------- transfer function
+#
+# DiscreteTransferFunction is the one part of the control stack that needs
+# SciPy, which is deliberately not a runtime dependency: a minimal Raspberry Pi
+# install does not have it, and the tracker and controller are built to work
+# without it. These tests therefore skip rather than fail there -- as they did
+# on the Pi, where SciPy is genuinely absent and the code was behaving exactly
+# as designed by raising a clear ImportError.
+
+pytestmark_scipy = pytest.mark.skipif(
+    importlib.util.find_spec("scipy") is None,
+    reason="scipy is an optional dependency and is not installed on a minimal Pi image",
+)
 
 
+@pytestmark_scipy
 def test_discrete_transfer_function_unit_gain_passthrough():
     tf = DiscreteTransferFunction([1.0], [1.0], dt=0.01)
     assert tf.step(1.0) == pytest.approx(1.0)
 
 
+@pytestmark_scipy
 def test_first_order_lag_settles_at_the_input():
     tf = DiscreteTransferFunction([1.0], [0.1, 1.0], dt=0.001)
     output = 0.0
@@ -268,6 +283,7 @@ def test_first_order_lag_settles_at_the_input():
     assert output == pytest.approx(1.0, abs=0.01)
 
 
+@pytestmark_scipy
 def test_transfer_function_rejects_bad_arguments():
     with pytest.raises(ValueError):
         DiscreteTransferFunction([], [1.0], dt=0.01)

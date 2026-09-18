@@ -124,17 +124,41 @@ def test_the_downscale_kernel_changes_the_pixels_at_a_non_dyadic_ratio():
     assert not np.array_equal(area, linear)
 
 
-def test_the_kernels_coincide_at_an_exact_two_to_one_downscale():
+def test_the_kernels_all_but_coincide_at_an_exact_two_to_one_downscale():
     """Not a quirk to work around -- the reason the ablation shows no gain at
     the deployed 1280x720 capture resolution. Pinned so nobody 'fixes' the
-    documentation by assuming the kernel always matters."""
+    documentation by assuming the kernel always matters.
+
+    The tolerance is not slack. On x86 the two kernels are bit-identical here
+    and this passes with a difference of exactly zero. On aarch64 -- which is
+    what the Raspberry Pi actually runs -- OpenCV's NEON path rounds
+    differently and about a third of the pixels come out one level apart. This
+    test asserted bit-identity until it was first run on the Pi, where it
+    failed for that reason and nothing else.
+
+    One level in 255 cannot change a detection, so the conclusion drawn in
+    docs/benchmarks.md survives. The word "identical" does not, and a test that
+    passes on the development machine while failing on the deployment target is
+    worse than no test.
+    """
     rng = np.random.default_rng(0)
     image = rng.integers(0, 255, (720, 1280, 3), dtype=np.uint8)
 
     area, _ = letterbox(image, (640, 640), downscale="area")
     linear, _ = letterbox(image, (640, 640), downscale="linear")
 
-    assert np.array_equal(area, linear)
+    difference = np.abs(area.astype(np.int16) - linear.astype(np.int16))
+    assert difference.max() <= 1, (
+        f"expected agreement to within one level at 2:1, saw {difference.max()}"
+    )
+
+    # And the contrast that matters: at 3:1 they disagree by two orders of
+    # magnitude more, on both architectures.
+    tall = rng.integers(0, 255, (1080, 1920, 3), dtype=np.uint8)
+    area_3to1, _ = letterbox(tall, (640, 640), downscale="area")
+    linear_3to1, _ = letterbox(tall, (640, 640), downscale="linear")
+    spread = np.abs(area_3to1.astype(np.int16) - linear_3to1.astype(np.int16)).max()
+    assert spread > 50, f"expected a large disagreement at 3:1, saw {spread}"
 
 
 def test_the_kernels_agree_on_the_geometry():
