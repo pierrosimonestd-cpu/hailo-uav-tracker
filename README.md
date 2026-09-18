@@ -210,7 +210,7 @@ benchmarks/        detection, tracking, latency, hard negatives, control
 tools/             dataset fetch/prepare, train, export, quantise, Hailo compile
 configs/           Pi + Hailo, and a desktop ONNX config
 docs/              architecture, control design, benchmarks, hardware, dataset
-tests/             168 tests, plus a C++ conformance test for the firmware
+tests/             221 tests, plus a C++ conformance test for the firmware
 ```
 
 ## Testing
@@ -218,6 +218,11 @@ tests/             168 tests, plus a C++ conformance test for the firmware
 ```bash
 pytest tests                       # runs anywhere; no NPU, no PyTorch, no turret
 ```
+
+221 tests, 86% line coverage. The uncovered remainder is almost entirely the
+three device-backed detection backends — Hailo needs an NPU, Ultralytics needs
+PyTorch and a checkpoint — which is why everything downstream of them is written
+against one `Detection` type that a stub can produce.
 
 CI additionally compiles the **actual firmware header** with a host C++ compiler
 and runs the same protocol vectors and adversarial byte streams against it, so
