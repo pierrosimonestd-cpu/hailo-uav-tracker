@@ -27,12 +27,113 @@ python benchmarks/eval_detection.py \
 ```
 
 <!-- BEGIN GENERATED: detection -->
-_No results yet. Run the benchmark to populate this table._
+| Model | Backend | AP | AP50 | AP75 | AP_S | AP_M | AP_L | Images |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `yolov8n-fp32-onnx` | onnx:cpu | 0.556 | 0.894 | 0.585 | 0.418 | 0.578 | 0.717 | 2200 |
+| `yolov8n-fp32-pytorch` | ultralytics:cpu | 0.543 | 0.886 | 0.574 | 0.395 | 0.567 | 0.713 | 2200 |
+| `yolov8n-int8-onnx` | onnx:cpu | 0.518 | 0.875 | 0.522 | 0.358 | 0.536 | 0.709 | 2200 |
 <!-- END GENERATED: detection -->
 
 `AP_S` is the column to read first. Over half the objects in this dataset are
 below 32×32 pixels, and an aggregate AP can look respectable while the model has
 stopped seeing distant targets — which are the ones worth detecting early.
+
+### The resize kernel, and a correctness proof
+
+The ONNX row above scores *higher* than the PyTorch row it was exported from.
+Same weights, so either the decode is wrong or the preprocessing differs.
+
+It is the preprocessing. Ultralytics resizes with bilinear interpolation;
+[`preprocess.py`](../src/uavtrack/detect/preprocess.py) uses `cv2.INTER_AREA`
+when shrinking. Re-scoring the same graph on the same images with bilinear
+forced back on isolates the effect:
+
+```bash
+python benchmarks/eval_detection.py     --model models/uav_yolov8n_640.onnx     --downscale linear --tag ablation-inter-linear
+```
+
+<!-- BEGIN GENERATED: preprocessing-ablation -->
+| Metric | Ultralytics (bilinear) | This decode, bilinear | This decode, `INTER_AREA` | Area &minus; bilinear |
+| ---: | ---: | ---: | ---: | ---: |
+| `AP` | 0.5427 | 0.5428 | 0.5557 | +0.0130 |
+| `AP50` | 0.8858 | 0.8860 | 0.8935 | +0.0075 |
+| `AP75` | 0.5738 | 0.5669 | 0.5852 | +0.0182 |
+| `AP_small` | 0.3950 | 0.3966 | 0.4185 | +0.0219 |
+| `AP_medium` | 0.5674 | 0.5665 | 0.5779 | +0.0113 |
+| `AP_large` | 0.7129 | 0.7155 | 0.7175 | +0.0020 |
+<!-- END GENERATED: preprocessing-ablation -->
+
+**The decode is correct.** With the kernel matched, this implementation lands
+within 0.0001 AP and 0.0002 AP50 of Ultralytics across 2,200 images. The box
+decode, the coordinate transform and the NMS here are hand-written NumPy, and
+they reproduce the reference to four decimal places. That is the strongest
+statement available about a reimplementation: not "it looks right", but "it
+scores the same".
+
+#### Where the gain comes from, and where it does not
+
+The aggregate gain is real but it is an average over a benchmark with four
+source resolutions, and the kernel does nothing at all for some of them:
+
+```bash
+python benchmarks/analyse_resize_ablation.py
+```
+
+<!-- BEGIN GENERATED: resize-by-resolution -->
+| Source | Downscale | Images | AP `area` | AP `linear` | &Delta; AP | &Delta; AP_S |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1920x1080 | 3.00:1 | 1348 | 0.4769 | 0.4540 | +0.0229 | +0.0236 |
+| 1280x720 | 2.00:1 | 836 | 0.6721 | 0.6721 | +0.0000 | +0.0000 |
+| 960x720 | 1.50:1 | 8 &dagger; | 0.7969 | 0.7969 | +0.0000 | +0.0000 |
+| 640x360 | 1.00:1 | 6 &dagger; | 0.5864 | 0.5864 | +0.0000 | +0.0000 |
+| 1440x1080 | 2.25:1 | 1 &dagger; | 0.6000 | 0.2500 | +0.3500 | +0.0000 |
+| 696x643 | 1.09:1 | 1 &dagger; | 0.6243 | 0.6243 | +0.0000 | +0.0000 |
+
+&dagger; fewer than 50 images; shown for completeness, not interpretable.
+<!-- END GENERATED: resize-by-resolution -->
+
+Every point of the improvement comes from the 1920x1080 images. At 1280x720 the
+delta is not small, it is **exactly zero** -- because at an exact 2:1 downscale
+OpenCV's bilinear filter averages the same 2x2 block that `INTER_AREA` does and
+the two kernels produce bit-identical pixels. That is pinned by a test, not
+inferred.
+
+The mechanism at 3:1 is not "area-averaging keeps more signal". Averaged over
+sub-pixel offsets both kernels pass the *same* total energy. The difference is
+variance. Rendering a one-pixel-wide line -- what a distant UAV becomes at
+range -- at 24 sub-pixel offsets:
+
+| Kernel | min | max | mean |
+|---|---:|---:|---:|
+| `INTER_AREA` | 85 | 85 | 85.0 |
+| `INTER_LINEAR` | **0** | 255 | 85.0 |
+
+Bilinear at 3:1 samples two columns of every three. The target lands on a
+sample and comes through at full intensity, or lands between samples and
+disappears completely; it is worse than area-averaging at 16 of 24 offsets. A
+detector gains nothing from the offsets where bilinear over-delivers and fails
+outright on the ones where the target is gone. Area-averaging trades the peaks
+away for a response that does not depend on where the drone happens to sit
+within a source pixel. See
+[`test_preprocess.py`](../tests/test_preprocess.py).
+
+#### What this means for the deployed configuration
+
+**It does not apply to it.** [`configs/rpi5_hailo8l.yaml`](../configs/rpi5_hailo8l.yaml)
+captures at 1280x720, which is exactly 2:1 into a 640 network -- the row where
+the measured delta is zero. The honest reading of the ablation is:
+
+- the `INTER_AREA` default is the right default, and costs nothing;
+- it is worth roughly two points of `AP_small` **at non-dyadic downscale ratios**;
+- at this project's own capture resolution it is a no-op, and quoting the
+  aggregate number as a property of the turret would be quoting a true
+  measurement to support a false claim.
+
+It also suggests something testable on hardware: capturing at 1920x1080 and
+letterboxing 3:1 may detect small targets better than capturing at 720p, for
+reasons that have nothing to do with the extra pixels reaching the network.
+That has not been measured here, and is listed in
+[What this does not do](../README.md#what-this-does-not-do).
 
 ### Quantisation, and how it fails
 
@@ -81,6 +182,41 @@ points for the YOLOv8/YOLO11 family (§5).
 
 ---
 
+### The training run behind these numbers
+
+```bash
+python tools/train_uav.py     --data data/dut_antiuav/dut_antiuav_fastval.yaml     --epochs 10 --imgsz 640 --batch 16 --device cpu     --workers 8 --cache ram --close-mosaic 3
+```
+
+YOLOv8n from the COCO-pretrained checkpoint, 10 epochs on the 5,200-image
+training split, CPU only, 3 h 52 m wall clock. The exact arguments are written
+to `runs/train/uav_yolov8n/train_config.json` next to the weights.
+
+![Training curves](../assets/training_curves.png)
+
+**These curves are not the reported accuracy.** Per-epoch validation runs
+against a 400-image subset (`dut_antiuav_fastval.yaml`), because validating on
+the full split after every CPU epoch costs more than the epoch does. The subset
+is for watching the curve and for checkpoint selection; every number in §1 is
+measured on the untouched 2,200-image test split.
+
+Two things in the curve are worth knowing if you re-run this:
+
+- mAP50 oscillates hard for the first five epochs -- 0.58, 0.49, 0.63, 0.58,
+  0.68 -- while the classification loss falls monotonically throughout. On a
+  400-image subset the metric is noisy enough to look like divergence when
+  nothing is wrong. Watch the loss.
+- The last three epochs run with mosaic augmentation disabled
+  (`--close-mosaic 3`), and the step is visible: 0.772 to 0.804 mAP50 on the
+  final epoch.
+
+![Precision-recall, validation subset](../assets/pr_curve_val.png)
+
+Ten CPU epochs is a deliberately modest budget -- enough to produce a detector
+worth measuring end to end, not enough to be a serious attempt at the benchmark.
+A longer schedule on a GPU, and birds as labelled negatives, are the two obvious
+improvements.
+
 ## 2. Latency and throughput
 
 ```bash
@@ -88,7 +224,9 @@ python benchmarks/bench_latency.py --model models/uav_yolov8n_640.hef --frames 3
 ```
 
 <!-- BEGIN GENERATED: latency -->
-_No results yet. Run the benchmark to populate this table._
+| Model | Backend | Inference (ms) | End to end (ms) | p95 | p99 | FPS |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `yolov8n-fp32-onnx` | onnx:cpu | 39.8 | 40.1 | 45.2 | 50.4 | 24.9 |
 <!-- END GENERATED: latency -->
 
 Quote the **p95**, not the mean. A control loop is hurt by the tail: one 200 ms
@@ -116,7 +254,9 @@ python benchmarks/eval_tracking.py --model runs/train/uav_yolov8n/weights/best.p
 ```
 
 <!-- BEGIN GENERATED: tracking -->
-_No results yet. Run the benchmark to populate this table._
+| Model | Sequences | Frames | Success AUC | Success@0.5 | P@20px | Recall | Re-acquisitions |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `yolov8n-fp32-pytorch` | 20 | 24,804 | 0.593 | 0.748 | 0.790 | 0.816 | 193 |
 <!-- END GENERATED: tracking -->
 
 **Not comparable to the dataset's SOT baselines.** A single-object tracker is
@@ -144,7 +284,9 @@ python benchmarks/eval_hard_negatives.py --model runs/train/uav_yolov8n/weights/
 ```
 
 <!-- BEGIN GENERATED: hard-negatives -->
-_No results yet. Run the benchmark to populate this table._
+| Model | Bird images | Threshold | False-positive rate | Threshold for 1% |
+| ---: | ---: | ---: | ---: | ---: |
+| `yolov8n-fp32-pytorch` | 593 | 0.35 | 23.44% | 0.9 |
 <!-- END GENERATED: hard-negatives -->
 
 The metric is the fraction of bird images that produce at least one UAV

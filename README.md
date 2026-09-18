@@ -70,7 +70,11 @@ is written up with the wrong answers included:
 ### Detection — DUT Anti-UAV test split, COCO protocol
 
 <!-- BEGIN GENERATED: detection -->
-_No results yet. Run the benchmark to populate this table._
+| Model | Backend | AP | AP50 | AP75 | AP_S | AP_M | AP_L | Images |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `yolov8n-fp32-onnx` | onnx:cpu | 0.556 | 0.894 | 0.585 | 0.418 | 0.578 | 0.717 | 2200 |
+| `yolov8n-fp32-pytorch` | ultralytics:cpu | 0.543 | 0.886 | 0.574 | 0.395 | 0.567 | 0.713 | 2200 |
+| `yolov8n-int8-onnx` | onnx:cpu | 0.518 | 0.875 | 0.522 | 0.358 | 0.536 | 0.709 | 2200 |
 <!-- END GENERATED: detection -->
 
 Read `AP_S` first: **52% of the objects in this dataset are smaller than 32×32
@@ -81,19 +85,52 @@ distant targets, which are the ones worth detecting early.
 ### Latency
 
 <!-- BEGIN GENERATED: latency -->
-_No results yet. Run the benchmark to populate this table._
+| Model | Backend | Inference (ms) | End to end (ms) | p95 | p99 | FPS |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `yolov8n-fp32-onnx` | onnx:cpu | 39.8 | 40.1 | 45.2 | 50.4 | 24.9 |
 <!-- END GENERATED: latency -->
 
 ### Tracking — DUT Anti-UAV sequences
 
 <!-- BEGIN GENERATED: tracking -->
-_No results yet. Run the benchmark to populate this table._
+| Model | Sequences | Frames | Success AUC | Success@0.5 | P@20px | Recall | Re-acquisitions |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `yolov8n-fp32-pytorch` | 20 | 24,804 | 0.593 | 0.748 | 0.790 | 0.816 | 193 |
 <!-- END GENERATED: tracking -->
 
 Detect-and-track with no ground-truth initialisation, so this is a strictly
 harder task than the single-object-tracking baselines published with the
 dataset and is not compared against them. *Recall* keeps the rest honest: a
 tracker can post a good success curve while answering on a third of the frames.
+
+### Bird discrimination — the weakest result here
+
+DUT Anti-UAV contains no birds, so a model trained on it alone has never been
+told that a bird is not a drone. Measured against 593 bird photographs from
+Open Images V7, with aircraft classes excluded:
+
+<!-- BEGIN GENERATED: hard-negatives -->
+| Model | Bird images | Threshold | False-positive rate | Threshold for 1% |
+| ---: | ---: | ---: | ---: | ---: |
+| `yolov8n-fp32-pytorch` | 593 | 0.35 | 23.44% | 0.9 |
+<!-- END GENERATED: hard-negatives -->
+
+**Close to one bird image in four triggers a UAV detection** at the deployed
+threshold. Suppressing that to 1% needs a confidence threshold of 0.9, which
+would discard most true detections as well. This is the number to fix next, and
+the fix is training data rather than tuning: birds as labelled negatives. It is
+reported here at full strength because a turret that swings onto every passing
+pigeon is the actual failure mode of this class of system, and a benchmark table
+that omits it would be describing a different project.
+
+### Predictions
+
+![Predictions against ground truth](assets/predictions.jpg)
+
+Six test images spanning the object-size range, smallest first. Green is ground
+truth, orange is the model. Where the target is too small to see at this scale
+the outlined region is magnified into the corner — which is itself the point:
+most of this benchmark looks like the top-left cell, not the bottom-right one.
 
 ### Velocity feed-forward — closed-loop simulation
 
@@ -210,7 +247,7 @@ benchmarks/        detection, tracking, latency, hard negatives, control
 tools/             dataset fetch/prepare, train, export, quantise, Hailo compile
 configs/           Pi + Hailo, and a desktop ONNX config
 docs/              architecture, control design, benchmarks, hardware, dataset
-tests/             253 tests, plus a C++ conformance test for the firmware
+tests/             258 tests, plus a C++ conformance test for the firmware
 ```
 
 ## Testing
@@ -219,7 +256,7 @@ tests/             253 tests, plus a C++ conformance test for the firmware
 pytest tests                       # runs anywhere; no NPU, no PyTorch, no turret
 ```
 
-253 tests, 86% line coverage. The uncovered remainder is almost entirely the
+258 tests, 86% line coverage. The uncovered remainder is almost entirely the
 three device-backed detection backends — Hailo needs an NPU, Ultralytics needs
 PyTorch and a checkpoint — which is why everything downstream of them is written
 against one `Detection` type that a stub can produce.
@@ -264,6 +301,19 @@ how you decide what to take to the hardware, not a substitute for doing so.
 
 **The INT8 study is a proxy.** ONNX Runtime static quantisation shares the
 mechanisms that matter with the Hailo quantiser, but it is not that quantiser.
+
+**It confuses birds with drones.** 23% of bird images produce a detection at the
+operating threshold, measured above. Trained on a benchmark with no birds in it,
+the model has no reason to do otherwise. Treat the detector as untuned for
+cluttered airspace until it has seen labelled negatives.
+
+**The resize-kernel gain does not apply to the shipped configuration.** The
+`INTER_AREA` preprocessing is worth about two points of `AP_small` on the
+benchmark, but all of that comes from its 1920×1080 images. At the 1280×720 the
+Pi config captures, the downscale to 640 is exactly 2:1, where OpenCV's bilinear
+filter is bit-identical to area-averaging and the gain is exactly zero. Capturing
+at 1080p might recover it; that has not been measured on hardware.
+[Details](docs/benchmarks.md#the-resize-kernel-and-a-correctness-proof).
 
 **Monocular, so no range.** Everything is angular. Two targets on the same
 bearing at different distances are indistinguishable, which is simply true of
