@@ -120,6 +120,23 @@ def build_steps(args) -> list[Step]:
             [int8, coco_gt, images],
         ),
         Step(
+            "detection-ablation",
+            [
+                "benchmarks/eval_detection.py",
+                "--model",
+                str(onnx),
+                "--gt",
+                str(coco_gt),
+                "--images",
+                str(images),
+                "--downscale",
+                "linear",
+                "--tag",
+                "ablation-inter-linear",
+            ],
+            [onnx, coco_gt, images],
+        ),
+        Step(
             "latency-onnx",
             [
                 "benchmarks/bench_latency.py",
@@ -156,6 +173,16 @@ def build_steps(args) -> list[Step]:
                 "yolov8n-fp32-pytorch",
             ],
             [weights],
+        ),
+        Step(
+            "resize-ablation-split",
+            ["benchmarks/analyse_resize_ablation.py"],
+            # Regroups what the two ablation runs already wrote, so it needs
+            # their raw detections rather than the model.
+            [
+                Path("benchmarks/results/yolov8n-fp32-onnx/detections.json"),
+                Path("benchmarks/results/ablation-inter-linear/detections.json"),
+            ],
         ),
         Step("control-simulation", ["benchmarks/bench_control.py", "--study", "all"], []),
     ]

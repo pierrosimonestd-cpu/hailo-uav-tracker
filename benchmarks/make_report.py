@@ -49,7 +49,9 @@ def table(header: list[str], rows: list[list[str]], align: str | None = None) ->
 
 def detection_table(results_dir: Path) -> str:
     payloads = load(results_dir, "detection_*.json")
-    payloads = [p for p in payloads if not p.get("tag", "").startswith("_")]
+    # Ablations are answers to a specific question, not deployable configurations,
+    # so they get their own table rather than a row next to the real models.
+    payloads = [p for p in payloads if not p.get("tag", "").startswith(("_", "ablation-"))]
     rows = []
     for p in sorted(payloads, key=lambda p: -p["metrics"].get("AP", 0)):
         m = p["metrics"]
@@ -71,6 +73,99 @@ def detection_table(results_dir: Path) -> str:
         rows,
         align="---:",
     )
+
+
+def preprocessing_ablation_table(results_dir: Path) -> str:
+    """INTER_AREA against INTER_LINEAR, same graph, same images.
+
+    Two questions at once. Matching Ultralytics' bilinear kernel should
+    reproduce Ultralytics' score -- if it does not, the hand-written decode is
+    wrong somewhere. And if area-averaging helps because it anti-aliases, the
+    gain belongs on small objects, not large ones.
+    """
+    by_tag = {}
+    for payload in load(results_dir, "detection_*.json"):
+        by_tag[payload.get("tag", "")] = payload
+
+    linear = by_tag.get("ablation-inter-linear")
+    area = by_tag.get("yolov8n-fp32-onnx")
+    torch_ = by_tag.get("yolov8n-fp32-pytorch")
+    if not (linear and area and torch_):
+        return "_No results yet. Run the benchmark to populate this table._"
+
+    keys = ["AP", "AP50", "AP75", "AP_small", "AP_medium", "AP_large"]
+    rows = []
+    for key in keys:
+        t_val = torch_["metrics"][key]
+        l_val = linear["metrics"][key]
+        a_val = area["metrics"][key]
+        rows.append(
+            [
+                f"`{key}`",
+                f"{t_val:.4f}",
+                f"{l_val:.4f}",
+                f"{a_val:.4f}",
+                f"{a_val - l_val:+.4f}",
+            ]
+        )
+    return table(
+        [
+            "Metric",
+            "Ultralytics (bilinear)",
+            "This decode, bilinear",
+            "This decode, `INTER_AREA`",
+            "Area &minus; bilinear",
+        ],
+        rows,
+        align="---:",
+    )
+
+
+def resize_by_resolution_table(results_dir: Path) -> str:
+    """Where the resize-kernel gain actually comes from.
+
+    Rows below the interpretability threshold are still shown -- hiding a row
+    because it is noisy is its own kind of dishonesty -- but marked, so a +0.35
+    delta measured on one image is not read as a result.
+    """
+    path = results_dir / "resize_ablation_by_resolution.json"
+    if not path.exists():
+        return "_No results yet. Run the benchmark to populate this table._"
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    rows = []
+    for group in payload["by_resolution"]:
+        label = f"{group['width']}x{group['height']}"
+        images = str(group["images"])
+        if not group["interpretable"]:
+            images += " &dagger;"
+        rows.append(
+            [
+                label,
+                f"{group['downscale_ratio']:.2f}:1",
+                images,
+                f"{group['ap_area']:.4f}",
+                f"{group['ap_linear']:.4f}",
+                f"{group['ap_delta']:+.4f}",
+                f"{group['ap_small_delta']:+.4f}",
+            ]
+        )
+    body = table(
+        [
+            "Source",
+            "Downscale",
+            "Images",
+            "AP `area`",
+            "AP `linear`",
+            "&Delta; AP",
+            "&Delta; AP_S",
+        ],
+        rows,
+        align="---:",
+    )
+    threshold = payload["min_images_for_a_claim"]
+    footnote = f"&dagger; fewer than {threshold} images; shown for completeness, not interpretable."
+    return f"{body}\n\n{footnote}"
 
 
 def latency_table(results_dir: Path) -> str:
@@ -278,6 +373,8 @@ def main() -> int:
     sections = {
         "detection": detection_table(args.results),
         "latency": latency_table(args.results),
+        "preprocessing-ablation": preprocessing_ablation_table(args.results),
+        "resize-by-resolution": resize_by_resolution_table(args.results),
         "hard-negatives": hard_negative_table(args.results),
         "tracking": tracking_table(args.results),
         "readme-latency": readme_latency_table(args.results),
