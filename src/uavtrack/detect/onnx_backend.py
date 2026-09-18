@@ -62,6 +62,13 @@ class OnnxDetector(DetectorBackend):
         width = shape[3] if isinstance(shape[3], int) else 640
         self._input_size = (int(width), int(height))
 
+        # Resolved once, not on each access: benchmark scripts report the
+        # backend name while writing their results file, which happens after
+        # close(), and a property that reaches into a released session would
+        # fail exactly then.
+        provider = self._session.get_providers()[0].replace("ExecutionProvider", "")
+        self._name = f"onnx:{provider.lower()}"
+
         self._model_path = model_path
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
@@ -73,8 +80,7 @@ class OnnxDetector(DetectorBackend):
 
     @property
     def name(self) -> str:
-        provider = self._session.get_providers()[0].replace("ExecutionProvider", "")
-        return f"onnx:{provider.lower()}"
+        return self._name
 
     def infer(self, frame: np.ndarray) -> list[Detection]:
         padded, transform = letterbox(frame, self._input_size)

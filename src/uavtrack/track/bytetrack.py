@@ -25,6 +25,15 @@ import numpy as np
 from uavtrack.detect.base import Detection
 from uavtrack.track.kalman import KalmanBoxTracker
 
+try:
+    # Resolved at import, never inside the loop. Importing SciPy lazily on the
+    # first association costs over a second, and it lands on whichever frame
+    # first has both a track and a detection -- measured as a 1.8 s p99 spike in
+    # benchmarks/bench_latency.py before this was moved out here.
+    from scipy.optimize import linear_sum_assignment as _linear_sum_assignment
+except ImportError:  # pragma: no cover - exercised by the SciPy-free install
+    _linear_sum_assignment = None
+
 
 class TrackState(enum.Enum):
     """Lifecycle of a track."""
@@ -105,7 +114,8 @@ def match(cost: np.ndarray, threshold: float) -> tuple[list[tuple[int, int]], li
     greedy descending-IoU matching otherwise. The fallback is not an
     approximation anyone should be nervous about here: with a handful of
     airborne targets the two agree, and the Raspberry Pi image is lighter for
-    not requiring SciPy.
+    not requiring SciPy. Which one is in use is decided at import time, so
+    neither path can surprise the control loop with a first-call cost.
 
     Args:
         cost: ``(n_tracks, n_detections)`` IoU matrix, higher is better.
@@ -118,12 +128,10 @@ def match(cost: np.ndarray, threshold: float) -> tuple[list[tuple[int, int]], li
     if n_rows == 0 or n_cols == 0:
         return [], list(range(n_rows)), list(range(n_cols))
 
-    try:
-        from scipy.optimize import linear_sum_assignment
-
-        row_idx, col_idx = linear_sum_assignment(-cost)
+    if _linear_sum_assignment is not None:
+        row_idx, col_idx = _linear_sum_assignment(-cost)
         pairs = list(zip(row_idx.tolist(), col_idx.tolist(), strict=True))
-    except ImportError:
+    else:
         pairs = _greedy_pairs(cost)
 
     matches = [(r, c) for r, c in pairs if cost[r, c] >= threshold]

@@ -224,9 +224,8 @@ def main() -> int:
         f"{'end to end':<12}{total_summary['median']:9.2f}{total_summary['p95']:9.2f}"
         f"{total_summary['p99']:9.2f}{total_summary['max']:9.2f}"
     )
-    if "postprocess" not in stage_summary or not stage_summary["postprocess"]:
-        print("
-(decode and NMS are inside the inference figure for this backend)")
+    if not stage_summary.get("postprocess"):
+        print("\n(decode and NMS are inside the inference figure for this backend)")
     print(f"\nthroughput  {payload['throughput_fps']} fps (median)")
     print(f"wrote {path}")
     return 0

@@ -99,6 +99,13 @@ controller cannot know a frame is late until it arrives.
 `control.latency_s` in your config should be set from the median-to-p95 range
 measured on **your** hardware.
 
+Watching the tail is not academic. This benchmark's first run reported a
+**1.8-second p99 on the tracking stage** against a 0.6 ms median -- a lazy
+`import scipy.optimize` inside the association function, paid on whichever frame
+first had both a track and a detection to match. The median hid it completely.
+Resolving the import at module load moved the stage p99 to 1.0 ms and the
+end-to-end p99 from 1959 ms to 164 ms.
+
 ---
 
 ## 3. Tracking — DUT Anti-UAV sequences
