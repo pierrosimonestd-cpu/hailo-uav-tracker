@@ -39,6 +39,22 @@ where the **highest** `N` is the current revision -- `base.prt.6` supersedes
 `base.prt.5`. Earlier revisions are kept because they are the design history;
 only the STL and 3MF exports are what you print.
 
+The part names are Italian, because that is what they were modelled as, and
+renaming a Creo part breaks retrieval by name. So they are translated rather
+than renamed:
+
+| Creo part | Literally |
+|---|---|
+| `base.prt` | "base" |
+| `base_rpi.prt` | "Raspberry Pi base" |
+| `u_torretta.prt` | "turret" |
+| `attacco_camera.prt` | "camera attachment" |
+| `attacco_cuscinetto_rivisto.prt` | "revised bearing seat" |
+| `prt0001.prt`, `prt0002.prt` | nothing -- Creo's default name for a part nobody renamed |
+
+Which STL each one exports to was never recorded, so it is not claimed here.
+Open the part if you need to know; the printable geometry is the STL either way.
+
 ## Power — read this part
 
 **Do not power the servos from the Pi or from the ESP32.** MG90S stall current
