@@ -197,7 +197,8 @@ def main() -> int:
             print(f"[{step.name}] skipped: {detail}", flush=True)
 
     if not args.dry_run:
-        print(f"\n{'=' * 78}\n[report] regenerating the documentation tables\n{'=' * 78}", flush=True)
+        banner = "=" * 78
+        print(f"\n{banner}\n[report] regenerating the documentation tables\n{banner}", flush=True)
         subprocess.run([sys.executable, "benchmarks/make_report.py"], cwd=ROOT)
 
     print(f"\n{'summary':<26}{'status':<10}{'detail'}")
