@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from uavtrack.io.protocol import (
     EffectorState,
@@ -45,6 +47,12 @@ class SerialLink:
         heartbeat_interval_s: How often to send a heartbeat when no angle
             command has gone out. The firmware trips its failsafe if it hears
             nothing, so silence must be deliberate, never incidental.
+        port_factory: Opens the serial port. Exists so the link's framing,
+            heartbeat and shutdown behaviour can be tested against a fake port;
+            production code leaves it alone.
+        reset_delay_s: How long to wait after opening the port before writing.
+            The ESP32 resets when the port opens, and anything written during
+            its bootloader window is lost or, worse, interpreted by it.
 
     Raises:
         ImportError: If ``pyserial`` is not installed.
@@ -56,13 +64,19 @@ class SerialLink:
         baudrate: int = 500_000,
         timeout: float = 0.0,
         heartbeat_interval_s: float = 0.2,
+        port_factory: Callable[..., Any] | None = None,
+        reset_delay_s: float = 2.0,
     ) -> None:
-        try:
-            import serial
-        except ImportError as exc:  # pragma: no cover - environment dependent
-            raise ImportError("pyserial is required for SerialLink: pip install pyserial") from exc
+        if port_factory is None:
+            try:
+                import serial
+            except ImportError as exc:  # pragma: no cover - environment dependent
+                raise ImportError(
+                    "pyserial is required for SerialLink: pip install pyserial"
+                ) from exc
+            port_factory = serial.Serial
 
-        self._serial = serial.Serial(port, baudrate, timeout=timeout, write_timeout=0.05)
+        self._serial = port_factory(port, baudrate, timeout=timeout, write_timeout=0.05)
         self._decoder = FrameDecoder()
         self._sequence = 0
         self._last_send = 0.0
@@ -70,9 +84,8 @@ class SerialLink:
         self.stats = LinkStats()
         self.last_status: Status | None = None
 
-        # The ESP32 resets when the serial port opens; anything written during
-        # the bootloader window is lost or, worse, interpreted by it.
-        time.sleep(2.0)
+        if reset_delay_s > 0:
+            time.sleep(reset_delay_s)
         self._serial.reset_input_buffer()
 
     def _next_sequence(self) -> int:
