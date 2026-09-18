@@ -24,7 +24,11 @@ classifiers = [
 # the pipeline must install on a Raspberry Pi 5 without a PyTorch wheel.
 dependencies = [
   "numpy>=1.24",
-  "opencv-python-headless>=4.8",
+  # opencv-python, not -headless: `uavtrack run --display` calls cv2.imshow, and
+  # the headless build raises at runtime rather than failing to install. On a
+  # Raspberry Pi, prefer the distribution package (apt install python3-opencv)
+  # over building this wheel from source.
+  "opencv-python>=4.8",
   "pyyaml>=6.0",
   "pyserial>=3.5",
 ]
