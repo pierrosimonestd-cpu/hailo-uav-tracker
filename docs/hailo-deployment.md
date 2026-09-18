@@ -33,9 +33,23 @@ sudo reboot
 
 ## 2. Runtime install on the Pi
 
+One command does all of section 2 and checks its own work:
+
+```bash
+./tools/provision_pi.sh
+```
+
+It installs the packages below, builds the virtualenv correctly, installs the
+project and then verifies the PCIe link, HailoRT, the Python bindings and the
+camera -- reporting which of those failed rather than exiting on the first one.
+Re-running it is safe. `./tools/provision_pi.sh --verify` checks without
+changing anything.
+
+The manual equivalent:
+
 ```bash
 sudo apt update
-sudo apt install -y hailo-all python3-picamera2
+sudo apt install -y hailo-all python3-picamera2 python3-opencv python3-venv
 sudo reboot
 ```
 
@@ -54,11 +68,22 @@ Then install this project:
 ```bash
 git clone https://github.com/pierrosimonestd-cpu/hailo-uav-tracker
 cd hailo-uav-tracker
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
 pip install -e .            # NumPy, OpenCV, PyYAML, pyserial. No PyTorch.
 ```
 
-`hailo_platform` comes from the apt package, not from pip. If you use a
-virtualenv, create it with `--system-site-packages` or the import will fail.
+Both flags on that venv line are load-bearing:
+
+- **`--system-site-packages`.** `hailo_platform` and `picamera2` are apt
+  packages, not pip packages. A venv without this cannot see them, and the
+  Hailo backend fails to import on a machine where the runtime is installed
+  perfectly.
+- **The venv itself.** Bookworm marks its system Python as externally managed
+  (PEP 668), so `pip install -e .` outside a venv is refused. The venv is the
+  fix; `--break-system-packages` is not -- it installs this project's
+  dependencies over apt-managed ones and the next `apt upgrade` gets to
+  arbitrate.
 
 ## 3. Compiling the model (on x86_64)
 
