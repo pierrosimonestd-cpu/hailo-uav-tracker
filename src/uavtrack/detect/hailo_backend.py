@@ -77,10 +77,31 @@ class HailoDetector(DetectorBackend):
         self._infer_model.input().set_format_type(FormatType.UINT8)
 
         output_info = self._hef.get_output_vstream_infos()
-        nms_orders = {FormatOrder.HAILO_NMS}
-        for extra in ("HAILO_NMS_BY_CLASS", "HAILO_NMS_BY_SCORE"):
-            if hasattr(FormatOrder, extra):
-                nms_orders.add(getattr(FormatOrder, extra))
+
+        # Which enum members exist depends on the HailoRT version, so every one
+        # is looked up rather than named directly. HailoRT 4.23 replaced the
+        # single HAILO_NMS with four variants; seeding this set with a bare
+        # FormatOrder.HAILO_NMS raised AttributeError on that version before the
+        # tolerant lookup below ever ran -- which is how this was found, on the
+        # first run against a real device.
+        nms_orders = {
+            order
+            for order in (
+                getattr(FormatOrder, name, None)
+                for name in (
+                    "HAILO_NMS",
+                    "HAILO_NMS_BY_CLASS",
+                    "HAILO_NMS_BY_SCORE",
+                    "HAILO_NMS_ON_CHIP",
+                )
+            )
+            if order is not None
+        }
+        if not nms_orders:  # pragma: no cover - would mean an unrecognised HailoRT
+            raise RuntimeError(
+                "this HailoRT exposes no HAILO_NMS* format order; the on-chip NMS "
+                "layout cannot be recognised. Report the HailoRT version."
+            )
         self._nms_on_chip = self._infer_model.outputs[0].format.order in nms_orders
 
         for info in output_info:
