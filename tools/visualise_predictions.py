@@ -123,9 +123,7 @@ def main() -> int:
     while len(cells) < rows * columns:
         cells.append(np.full((CELL, CELL, 3), 18, dtype=np.uint8))
 
-    sheet = np.vstack(
-        [np.hstack(cells[r * columns : (r + 1) * columns]) for r in range(rows)]
-    )
+    sheet = np.vstack([np.hstack(cells[r * columns : (r + 1) * columns]) for r in range(rows)])
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(args.out), sheet, [cv2.IMWRITE_JPEG_QUALITY, 88])
