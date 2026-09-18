@@ -210,7 +210,7 @@ benchmarks/        detection, tracking, latency, hard negatives, control
 tools/             dataset fetch/prepare, train, export, quantise, Hailo compile
 configs/           Pi + Hailo, and a desktop ONNX config
 docs/              architecture, control design, benchmarks, hardware, dataset
-tests/             221 tests, plus a C++ conformance test for the firmware
+tests/             253 tests, plus a C++ conformance test for the firmware
 ```
 
 ## Testing
@@ -219,10 +219,18 @@ tests/             221 tests, plus a C++ conformance test for the firmware
 pytest tests                       # runs anywhere; no NPU, no PyTorch, no turret
 ```
 
-221 tests, 86% line coverage. The uncovered remainder is almost entirely the
+253 tests, 86% line coverage. The uncovered remainder is almost entirely the
 three device-backed detection backends — Hailo needs an NPU, Ultralytics needs
 PyTorch and a checkpoint — which is why everything downstream of them is written
 against one `Detection` type that a stub can produce.
+
+Some of those tests exist to keep the documentation honest rather than the code
+correct: one re-derives every figure quoted in
+[control-design.md](docs/control-design.md) from the measured JSON, another
+fails on a broken link or a referenced script that does not exist, and a third
+imports the whole library in a subprocess with PyTorch, ONNX Runtime, HailoRT
+and SciPy blocked, so the claim about the Raspberry Pi install is enforced
+rather than asserted.
 
 CI additionally compiles the **actual firmware header** with a host C++ compiler
 and runs the same protocol vectors and adversarial byte streams against it, so
