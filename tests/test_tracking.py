@@ -249,3 +249,79 @@ def test_hysteresis_makes_a_marginally_better_challenger_lose():
     incumbent = selector.select(tracks, 0.05)
     for _ in range(20):
         assert selector.select(tracks, 0.05).track_id == incumbent.track_id
+
+
+# ------------------------------------------------- association fallback
+
+
+def test_greedy_fallback_matches_hungarian_on_iou_like_costs():
+    """The fallback is optimal for the shape of problem this tracker sees.
+
+    IoU association between well-separated airborne targets produces a matrix
+    where each track overlaps one detection strongly and the rest at nearly
+    zero. Greedy is provably optimal there. Pinned because the fallback is what
+    runs on a SciPy-free Raspberry Pi install, and nothing else exercises it
+    when SciPy is present.
+    """
+    scipy_solver = pytest.importorskip("scipy.optimize").linear_sum_assignment
+    from uavtrack.track.bytetrack import _greedy_pairs
+
+    rng = np.random.default_rng(0)
+    disagreements = 0
+    trials = 500
+
+    for _ in range(trials):
+        n_tracks = int(rng.integers(1, 5))
+        n_dets = int(rng.integers(1, 5))
+        # Background overlap under 0.05, one strong match per track.
+        cost = (rng.random((n_tracks, n_dets)) * 0.05).astype(np.float32)
+        for index in range(min(n_tracks, n_dets)):
+            cost[index, index] = 0.6 + 0.4 * rng.random()
+
+        rows, cols = scipy_solver(-cost)
+        optimal = sum(cost[r, c] for r, c in zip(rows, cols, strict=True))
+        greedy = sum(cost[r, c] for r, c in _greedy_pairs(cost))
+        if abs(optimal - greedy) > 1e-6:
+            disagreements += 1
+
+    assert disagreements == 0, (
+        f"greedy was suboptimal on {disagreements}/{trials} IoU-like matrices"
+    )
+
+
+def test_greedy_fallback_is_not_optimal_in_general():
+    """The other half of the claim, so the docstring cannot quietly overstate it.
+
+    On arbitrary cost matrices greedy is a genuine approximation. This test
+    exists to keep that honest: if someone widens the tracker to a problem where
+    costs are not IoU-like, the fallback is no longer free.
+    """
+    scipy_solver = pytest.importorskip("scipy.optimize").linear_sum_assignment
+    from uavtrack.track.bytetrack import _greedy_pairs
+
+    rng = np.random.default_rng(0)
+    disagreements = 0
+    trials = 500
+
+    for _ in range(trials):
+        cost = rng.random((int(rng.integers(1, 5)), int(rng.integers(1, 5)))).astype(np.float32)
+        rows, cols = scipy_solver(-cost)
+        optimal = sum(cost[r, c] for r, c in zip(rows, cols, strict=True))
+        greedy = sum(cost[r, c] for r, c in _greedy_pairs(cost))
+        if optimal - greedy > 1e-6:
+            disagreements += 1
+
+    assert disagreements > 0, "uniform random costs should expose greedy as an approximation"
+    # Greedy is never *better* than optimal; that would mean the solver is wrong.
+
+
+def test_greedy_fallback_never_double_assigns():
+    from uavtrack.track.bytetrack import _greedy_pairs
+
+    rng = np.random.default_rng(1)
+    for _ in range(200):
+        cost = rng.random((int(rng.integers(1, 6)), int(rng.integers(1, 6)))).astype(np.float32)
+        pairs = _greedy_pairs(cost)
+        assert len({r for r, _ in pairs}) == len(pairs)
+        assert len({c for _, c in pairs}) == len(pairs)
+        assert len(pairs) == min(cost.shape)

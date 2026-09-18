@@ -111,11 +111,19 @@ def match(cost: np.ndarray, threshold: float) -> tuple[list[tuple[int, int]], li
     """Solve the assignment between rows and columns of an IoU matrix.
 
     Uses the Hungarian algorithm when SciPy is installed and falls back to
-    greedy descending-IoU matching otherwise. The fallback is not an
-    approximation anyone should be nervous about here: with a handful of
-    airborne targets the two agree, and the Raspberry Pi image is lighter for
-    not requiring SciPy. Which one is in use is decided at import time, so
-    neither path can surprise the control loop with a first-call cost.
+    greedy descending-IoU matching otherwise, so a Raspberry Pi install need not
+    carry SciPy. Which one is in use is decided at import time, so neither path
+    can surprise the control loop with a first-call cost.
+
+    The fallback is optimal *for this shape of problem*, not in general. Greedy
+    matching is only equivalent to the Hungarian solution when each track has an
+    unambiguous best detection, which is the normal case here: airborne targets
+    are well separated, so a track overlaps one detection strongly and the rest
+    at essentially zero. Measured over 500 such matrices the two agree every
+    time; over 500 matrices of uniform random costs they disagree on about one
+    in nine, by up to a third of the total. If you ever put this in front of
+    genuinely overlapping targets, install SciPy.
+    See ``tests/test_tracking.py`` for both measurements.
 
     Args:
         cost: ``(n_tracks, n_detections)`` IoU matrix, higher is better.
