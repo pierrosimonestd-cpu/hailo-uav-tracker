@@ -177,7 +177,14 @@ def host_label(payload: dict) -> str:
     nothing to do with the model.
     """
     platform = payload.get("host", {}).get("platform", "")
-    if "aarch64" in platform:
+    backend = payload.get("backend", "")
+    on_pi = "aarch64" in platform
+    # The backend decides which processor actually ran the network: the Hailo
+    # rows were taken on the same board as the CPU rows, and calling them both
+    # "Pi 5 CPU" would attribute a 13.6 ms inference to the wrong silicon.
+    if backend.startswith("hailo"):
+        return "Pi 5 + Hailo-8L" if on_pi else f"Hailo ({platform.split('-')[0]})"
+    if on_pi:
         return "Pi 5 CPU"
     if "Windows" in platform or "x86_64" in platform:
         return "x86 desktop"

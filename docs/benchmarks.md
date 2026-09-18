@@ -232,6 +232,8 @@ python benchmarks/bench_latency.py --model models/uav_yolov8n_640.hef --frames 3
 | `yolov8n-fp32-onnx-rpi5cpu` | Pi 5 CPU | onnx:cpu | 153.6 | 153.9 | 180.9 | 183.0 | 6.5 |
 | `yolov8n-int8-onnx-rpi5cpu` | Pi 5 CPU | onnx:cpu | 75.0 | 75.3 | 93.6 | 96.0 | 13.3 |
 | `yolov8n-fp32-onnx` | x86 desktop | onnx:cpu | 39.8 | 40.1 | 45.2 | 50.4 | 24.9 |
+| `yolov8s-int8-hailo8l` | Pi 5 + Hailo-8L | hailo8l | 19.9 | 20.2 | 22.8 | 23.0 | 49.5 |
+| `yolov8n-int8-hailo8l` | Pi 5 + Hailo-8L | hailo8l | 13.6 | 13.8 | 14.0 | 14.2 | 72.7 |
 <!-- END GENERATED: latency -->
 
 Quote the **p95**, not the mean. A control loop is hurt by the tail: one 200 ms
@@ -244,45 +246,47 @@ measured on **your** hardware.
 
 ### What that costs in degrees, on the real board
 
-The Raspberry Pi rows above were measured on the target hardware -- a Pi 5 with
-4 GB and Debian 13, over SSH, with 80 real frames from the test split rather
-than synthetic ones. Feeding each measured latency back into the closed-loop
+Every row below was measured on the target hardware -- a Pi 5 with 4 GB and
+Debian 13, over SSH, against 80 real frames from the test split rather than
+synthetic ones. Feeding each measured latency back into the closed-loop
 simulation gives the number the whole project is about:
 
-| Configuration | Inference | Steady-state pointing error |
-|---|---:|---:|
-| x86 desktop, FP32 | 40 ms | 0.82&deg; |
-| Pi 5 CPU, INT8 | 75 ms | 0.99&deg; |
-| Pi 5 CPU, FP32 | 154 ms | 1.41&deg; |
+| Configuration | Inference | Tail (p99 over median) | FPS | Steady-state pointing error |
+|---|---:|---:|---:|---:|
+| Pi 5 CPU, FP32 | 153.6 ms | +18.9% | 6.5 | 1.41&deg; |
+| Pi 5 CPU, INT8 | 75.0 ms | +27.4% | 13.3 | 0.99&deg; |
+| **Hailo-8L, INT8** | **13.6 ms** | **+3.0%** | **72.7** | **0.65&deg;** |
 
 ```bash
-python -m uavtrack.cli simulate --trajectory circular --duration 20 --latency-ms 154
+python benchmarks/bench_latency.py --model models/yolov8n_h8l.hef --tag yolov8n-int8-hailo8l
+python -m uavtrack.cli simulate --trajectory circular --duration 20 --latency-ms 14
 ```
 
-Three things follow, and none of them were assumptions.
+**The accelerator is 11.3x faster than the Pi's CPU** on the same architecture
+and input size, and it more than halves the steady-state pointing error.
 
-**The Pi 5 CPU runs this model at 6.5 fps in FP32.** Not unusable, but a
-153 ms sense-to-act delay costs 1.41&deg; of steady-state pointing error against
-0.82&deg; on a desktop -- a 72% increase from the processor alone.
+**It also makes the latency deterministic, which may matter more.** The CPU's
+p99 sits 19-27% above its median; the Hailo's sits 3% above. This page has
+always said to quote the p95 rather than the mean, because a control loop is
+hurt by the tail: the tracker's extrapolation error grows with the gap and the
+controller cannot know a frame is late until it arrives. A jitter band of 3%
+instead of 27% is worth having independently of the speedup.
 
-**INT8 halves the latency on CPU too.** 153.6 ms to 75.0 ms, a 2.05x speedup
-from quantisation before any accelerator is involved, and the pointing error
-falls to 0.99&deg;. That is most of the benefit of the exercise, available on a
-board with no NPU at all.
+**Quantisation alone is worth 2.05x on the CPU**, 153.6 ms to 75.0 ms, on a
+board with no NPU involved. If you have no accelerator, that is still most of
+the exercise.
 
-**This is the gap the accelerator exists to close.** Hailo's published Model Zoo
-throughput for YOLOv8n on the Hailo-8L (&sect;5) is an order of magnitude faster
-than the Pi's CPU. At those latencies the simulation puts pointing error near
-its floor of about 0.68&deg;, where the servo's own lag rather than the vision
-pipeline sets the limit. The accelerator does not make the detector better; it
-moves the bottleneck off the detector.
+#### What these accelerator numbers are, and are not
 
-Watching the tail is not academic. This benchmark's first run reported a
-**1.8-second p99 on the tracking stage** against a 0.6 ms median -- a lazy
-`import scipy.optimize` inside the association function, paid on whichever frame
-first had both a track and a detection to match. The median hid it completely.
-Resolving the import at module load moved the stage p99 to 1.0 ms and the
-end-to-end p99 from 1959 ms to 164 ms.
+The HEF is Hailo's own **COCO-trained yolov8n** from the Model Zoo, not the UAV
+detector trained here, because compiling a HEF needs the Dataflow Compiler and
+that is x86_64 Linux only (see &sect;5 and docs/hailo-deployment.md).
+
+So the **latency is representative** -- identical architecture, identical
+640x640 input, same compiler, same device, same board -- and the **accuracy is
+not ours**. No detection metric in &sect;1 was measured on the accelerator. When
+the UAV model is compiled, it should land at or slightly under these times,
+being the same network with one class instead of eighty.
 
 ---
 
@@ -419,9 +423,33 @@ can do:
 
 Source: [Hailo Model Zoo, HAILO8L object detection](https://github.com/hailo-ai/hailo_model_zoo/blob/master/docs/public_models/HAILO8L/HAILO8L_object_detection.rst)
 
-yolov8n at 202 FPS gives the control loop roughly an order of magnitude more
-frames than it can use — §6 shows the loop bandwidth is capped near 1 Hz by
-latency. The useful question for this system is latency, not frame rate.
+### Published against measured, and where the difference goes
+
+Hailo publishes 202 FPS for yolov8n; this project measures 72.7 FPS for the same
+HEF on a Pi 5. That gap is worth decomposing rather than explaining away, and it
+is the reason the table above is kept separate from every other number here:
+
+| | FPS | What the step costs |
+|---|---:|---|
+| Hailo published, Intel host, PCIe Gen 3 x4 | 202 | — |
+| Pi 5, `hailortcli` raw, no Python | 117.7 | the host and a **x1** link |
+| Pi 5, this project's pipeline | 72.7 | this project's synchronous wrapper |
+
+The first step is the board. The Pi 5 negotiates PCIe **8 GT/s at width x1**
+(`current_link_width` is 1 while the Hailo-8L advertises `max_link_width` 4), so
+it has a quarter of the lanes Hailo's Intel host used. Nothing in software
+recovers that.
+
+The second step is ours. `HailoDetector` waits for each frame to come back
+before sending the next, where Hailo's harness keeps several in flight. For a
+tracking turret that is the right trade -- what the controller needs is the
+newest possible answer, not the largest number of answers -- but it costs about
+5 ms per frame of pipeline bubble and it should be stated rather than buried.
+
+None of which changes the conclusion: §6 shows loop bandwidth is capped near
+1 Hz by latency, so 72.7 FPS is already an order of magnitude more frames than
+the loop can use. The useful question for this system is latency, not frame
+rate.
 
 ---
 

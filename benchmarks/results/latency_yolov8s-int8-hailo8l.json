@@ -1,0 +1,75 @@
+{
+  "tag": "yolov8s-int8-hailo8l",
+  "kind": "measured",
+  "generated_utc": "2026-09-18T21:51:41+00:00",
+  "model": "/usr/share/hailo-models/yolov8s_h8l.hef",
+  "backend": "hailo8l",
+  "input_size": [
+    640,
+    640
+  ],
+  "frame_size": [
+    1280,
+    720
+  ],
+  "frames": 120,
+  "synthetic_frames": false,
+  "stages_ms": {
+    "preprocess": {
+      "mean": 0.808,
+      "median": 0.799,
+      "p95": 0.901,
+      "p99": 0.914,
+      "min": 0.758,
+      "max": 0.972
+    },
+    "inference": {
+      "mean": 20.094,
+      "median": 19.918,
+      "p95": 22.487,
+      "p99": 22.514,
+      "min": 19.689,
+      "max": 22.547
+    },
+    "postprocess": {
+      "mean": 0.0,
+      "median": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "track": {
+      "mean": 0.26,
+      "median": 0.271,
+      "p95": 0.45,
+      "p99": 0.473,
+      "min": 0.065,
+      "max": 0.555
+    },
+    "control": {
+      "mean": 0.004,
+      "median": 0.001,
+      "p95": 0.06,
+      "p99": 0.081,
+      "min": 0.0,
+      "max": 0.083
+    }
+  },
+  "postprocess_note": "Decode and NMS run inside the backend's infer() call and are counted in the inference figure. A zero row here means the HEF ran NMS on the device; an absent row means the split was not measurable, not that it was free.",
+  "end_to_end_ms": {
+    "mean": 20.361,
+    "median": 20.192,
+    "p95": 22.808,
+    "p99": 23.014,
+    "min": 19.773,
+    "max": 23.067
+  },
+  "throughput_fps": 49.52,
+  "host": {
+    "platform": "Linux-6.18.50+rpt-rpi-2712-aarch64-with-glibc2.41",
+    "processor": "",
+    "python": "3.13.5",
+    "cpu_count": 4
+  }
+}

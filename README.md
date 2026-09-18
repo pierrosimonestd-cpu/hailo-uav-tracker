@@ -35,7 +35,9 @@ $$\omega_c \approx \frac{0.8}{T_d + \tau}$$
 
 which for this hardware is under 1 Hz — while the servos themselves could slew at
 600 °/s. **The loop is latency-limited, not actuator-limited.** That is what the
-accelerator buys, and it is measurable:
+accelerator buys, and it is measured on the real board: 153.6 ms of inference on
+the Pi's CPU becomes 13.6 ms on the Hailo-8L, and steady-state pointing error
+falls from 1.41° to 0.65°.
 
 <!-- BEGIN GENERATED: readme-latency -->
 | Sense-to-act latency | RMS pointing error |  |
@@ -91,6 +93,8 @@ distant targets, which are the ones worth detecting early.
 | `yolov8n-fp32-onnx-rpi5cpu` | Pi 5 CPU | onnx:cpu | 153.6 | 153.9 | 180.9 | 183.0 | 6.5 |
 | `yolov8n-int8-onnx-rpi5cpu` | Pi 5 CPU | onnx:cpu | 75.0 | 75.3 | 93.6 | 96.0 | 13.3 |
 | `yolov8n-fp32-onnx` | x86 desktop | onnx:cpu | 39.8 | 40.1 | 45.2 | 50.4 | 24.9 |
+| `yolov8s-int8-hailo8l` | Pi 5 + Hailo-8L | hailo8l | 19.9 | 20.2 | 22.8 | 23.0 | 49.5 |
+| `yolov8n-int8-hailo8l` | Pi 5 + Hailo-8L | hailo8l | 13.6 | 13.8 | 14.0 | 14.2 | 72.7 |
 <!-- END GENERATED: latency -->
 
 ### Tracking — DUT Anti-UAV sequences
@@ -315,18 +319,21 @@ charging against a travel limit. Two real bugs found this way are documented in
 Stated plainly, because a project's honesty is in what it admits rather than
 what it claims.
 
-**No measurement here was taken on the Hailo NPU.** The board is real and
-verified — a Pi 5 with the AI HAT+, `hailortcli` reporting `Device
-Architecture: HAILO8L`, firmware 4.23.0 — and the latency table has real Pi 5
-**CPU** numbers measured over SSH on that board. But nothing in this repository
-has run on the accelerator itself, because compiling a `.hef` needs the Hailo
-Dataflow Compiler, which is x86_64 Linux only and behind a Developer Zone
-account. The Hailo-8L throughput figures in [benchmarks.md](docs/benchmarks.md)
-§5 remain Hailo's published Model Zoo results on COCO, measured on an Intel
-host, and are attributed as such. The backend is written against the HailoRT
-async API and the compile flow is scripted end to end; run
-`tools/compile_hailo.sh` on an x86 Linux box and then `benchmarks/bench_latency.py`
-on the Pi and those rows will fill in.
+**The accelerator numbers are not this project's detector.** The Hailo-8L
+latency in the table above is measured — on a real Pi 5 with the AI HAT+,
+`hailortcli` reporting `Device Architecture: HAILO8L`, firmware 4.23.0, through
+this repository's own `HailoDetector` — but the compiled model is Hailo's
+**COCO-trained yolov8n** from their Model Zoo, not the UAV detector trained
+here. Compiling a `.hef` needs the Hailo Dataflow Compiler, which is x86_64
+Linux only and behind a Developer Zone account, so the UAV weights have not
+been through it.
+
+The consequence is exact: the **latency is representative** — same
+architecture, same 640×640 input, same device, same board — and **no detection
+accuracy in this README was measured on the accelerator**. Run
+`tools/compile_hailo.sh` on an x86 Linux box, copy the HEF to the Pi, and
+`benchmarks/bench_latency.py` plus `benchmarks/eval_detection.py` will fill in
+the rows that are still missing.
 
 **The pointing results are simulation.** A rate-limited servo model with
 transport delay, documented in [`plant.py`](src/uavtrack/control/plant.py). It
