@@ -247,8 +247,10 @@ def main() -> int:
         latest.stop()
         server.server_close()
         thread.join(timeout=5.0)
-        if link is not None:
-            link.close()
+        # The link is deliberately not closed here. TrackingPipeline takes
+        # ownership of whatever link it is given and closes it on __exit__, so
+        # closing it again raises PortNotOpenError out of the shutdown path --
+        # which it did, on the first run against the real board.
 
     logger.info(
         "final: %d frames, %d detections, %d frames with a target",
