@@ -489,3 +489,85 @@ def test_an_uninverted_axis_is_unchanged():
         command = controller.update((900.0, 250.0), 0.05)
     assert command.pan_deg == pytest.approx(controller.pan_deg, abs=1e-9)
     assert command.tilt_deg == pytest.approx(controller.tilt_deg, abs=1e-9)
+
+
+# ------------------------------------------------- camera ego-motion removal
+#
+# The camera is bolted to the turret, so apparent motion in the image is the
+# sum of the target's motion and the turret's own. Everything here is about
+# the second term not being mistaken for the first.
+
+
+def _pixels_for_bearing(geometry: CameraGeometry, bearing_deg: float, boresight_deg: float):
+    """Where a target at ``bearing_deg`` lands when the turret points at ``boresight_deg``."""
+    offset_rad = math.radians(bearing_deg - boresight_deg)
+    dx = geometry.focal_px_x * math.tan(offset_rad)
+    return geometry.width / 2.0 + dx, geometry.height / 2.0
+
+
+def test_reported_angle_sets_the_reconstructed_bearing():
+    """Bearing must be turret angle plus in-frame offset, using the real angle."""
+    controller = _reversible()
+    geometry = controller.geometry
+
+    controller.report_angles(120.0, 90.0)
+    target_px = _pixels_for_bearing(geometry, bearing_deg=130.0, boresight_deg=120.0)
+    controller.update(target_px, 0.05)
+
+    bearing, _ = controller.pan_estimator.predict(controller.pan_estimator._samples[-1][0])
+    assert bearing == pytest.approx(130.0, abs=0.5)
+
+
+def test_a_static_target_reads_as_static_while_the_turret_sweeps():
+    """The whole point of reconstructing an absolute bearing.
+
+    The turret sweeps 40 degrees; the target never moves. In image coordinates
+    it races across the frame, and a loop that fitted a rate to *that* would
+    feed forward a velocity the target does not have -- which is exactly the
+    instability this cancellation exists to prevent.
+    """
+    controller = _reversible()
+    geometry = controller.geometry
+    bearing = 110.0
+
+    for step in range(10):
+        boresight = 70.0 + 4.0 * step  # the turret sweeping past
+        controller.report_angles(boresight, 90.0)
+        controller.update(_pixels_for_bearing(geometry, bearing, boresight), 0.05)
+
+    _, rate = controller.pan_estimator.predict(controller._time)
+    assert abs(rate) < 2.0, f"a stationary target was fitted a rate of {rate:.2f} deg/s"
+
+
+def test_without_cancellation_the_same_sweep_looks_like_motion():
+    """Guards the test above from passing for the wrong reason.
+
+    Feeding the raw in-frame offsets, with no turret angle added, must produce
+    a large apparent rate. If it did not, the test above would prove nothing.
+    """
+    controller = _reversible()
+    geometry = controller.geometry
+    bearing = 110.0
+
+    estimator = type(controller.pan_estimator)(window=controller.pan_estimator.window)
+    for step in range(10):
+        boresight = 70.0 + 4.0 * step
+        px, _ = _pixels_for_bearing(geometry, bearing, boresight)
+        offset_deg, _ = geometry.pixel_offset_to_angles(px - geometry.width / 2.0, 0.0)
+        estimator.update(step * 0.05, offset_deg)  # no turret angle added
+
+    _, naive_rate = estimator.predict(9 * 0.05)
+    assert abs(naive_rate) > 40.0, (
+        f"expected the uncancelled signal to look fast, saw {naive_rate:.1f} deg/s"
+    )
+
+
+def test_reporting_angles_snaps_the_internal_model():
+    """A report must correct the model, not sit alongside it drifting."""
+    controller = _reversible()
+    controller.update((900.0, 300.0), 0.05)
+
+    controller.report_angles(45.0, 100.0)
+    pan_then, tilt_then = controller._angle_at(controller._time)
+    assert pan_then == pytest.approx(45.0)
+    assert tilt_then == pytest.approx(100.0)

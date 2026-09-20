@@ -191,6 +191,22 @@ class TrackingPipeline:
                 timings_ms=timings,
             )
 
+    def _absorb_status(self, statuses) -> None:
+        """Hand the controller the turret angles the firmware reported.
+
+        Only the newest matters: an older one describes a position already
+        superseded, and feeding it would move the controller's idea of where
+        the turret is backwards.
+        """
+        if not statuses:
+            return
+        latest = statuses[-1]
+        pan = getattr(latest, "pan_deg", None)
+        tilt = getattr(latest, "tilt_deg", None)
+        if pan is None or tilt is None:
+            return
+        self.controller.report_angles(pan, tilt)
+
     def _steer(self, target: Track | None, dt: float) -> GimbalCommand | None:
         """Update the controller and push a command to the firmware."""
         if target is None:
@@ -201,7 +217,7 @@ class TrackingPipeline:
                 self._had_target = False
             if self.link is not None:
                 self.link.maintain()
-                self.link.poll()
+                self._absorb_status(self.link.poll())
             return None
 
         self._had_target = True
@@ -209,7 +225,7 @@ class TrackingPipeline:
 
         if self.link is not None:
             self.link.send_angles(command.pan_deg, command.tilt_deg)
-            self.link.poll()
+            self._absorb_status(self.link.poll())
         return command
 
     def close(self) -> None:

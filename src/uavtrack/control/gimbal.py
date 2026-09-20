@@ -323,6 +323,31 @@ class PanTiltController:
         self._angle_history.clear()
         self._angle_history.append((self._time, self.pan_deg, self.tilt_deg))
 
+    def report_angles(self, pan_deg: float, tilt_deg: float) -> None:
+        """Tell the controller where the turret actually is.
+
+        With the camera bolted to the turret, apparent target motion in the
+        image is the sum of the target's motion and the turret's own. The loop
+        cancels the latter by reconstructing an absolute bearing: the turret's
+        angle when the frame was captured, plus the target's offset from
+        boresight within it. That cancellation is only as good as the angle it
+        subtracts.
+
+        Without this the angle comes from an internal :class:`ServoModel` whose
+        time constant and delay are unidentified, so whatever the model gets
+        wrong survives as apparent target motion, gets fitted as a rate, and is
+        then amplified by the feed-forward. Calling this with the angle the
+        firmware reports replaces the guess with the real command in effect,
+        and snaps the model to it so the interpolation between reports starts
+        from the truth rather than drifting from it.
+
+        Still not the shaft position: hobby servos have no feedback, so this is
+        what the firmware is driving, and the servo's own lag remains modelled.
+        """
+        self._pan_model.reset(pan_deg)
+        self._tilt_model.reset(tilt_deg)
+        self._angle_history.append((self._time, pan_deg, tilt_deg))
+
     def _angle_at(self, timestamp: float) -> tuple[float, float]:
         """Modelled turret angles at ``timestamp``, from the history.
 

@@ -43,6 +43,10 @@ from enum import IntEnum
 SYNC_0 = 0xA5
 SYNC_1 = 0x5A
 
+#: STATUS payload size, and the size before the firmware reported angles.
+STATUS_PAYLOAD_BYTES = 10
+STATUS_PAYLOAD_BYTES_LEGACY = 6
+
 #: Longest frame this protocol can express, used to size the firmware's buffer.
 MAX_FRAME_LEN = 64
 
@@ -111,24 +115,51 @@ class SetAngles:
 
 @dataclass(frozen=True)
 class Status:
-    """Link statistics reported by the firmware."""
+    """Link statistics and the turret's own angles, reported by the firmware.
+
+    The angles are the firmware's interpolated command -- what it is writing to
+    the servos right now, after its own slew limiting -- not a measured shaft
+    position, because hobby servos have no feedback to measure. They are still
+    far better than the host's model of them for cancelling camera ego-motion:
+    they carry the real command history and the real rate limiting, leaving
+    only the servo's physical lag unaccounted for instead of the whole actuator.
+    """
 
     last_seq: int
     dropped_frames: int
     crc_errors: int
     effector: EffectorState
+    pan_deg: float = 0.0
+    tilt_deg: float = 0.0
 
     def payload(self) -> bytes:
         return struct.pack(
-            "<BHHB", self.last_seq, self.dropped_frames, self.crc_errors, int(self.effector)
+            "<BHHBhh",
+            self.last_seq,
+            self.dropped_frames,
+            self.crc_errors,
+            int(self.effector),
+            _to_centidegrees(self.pan_deg),
+            _to_centidegrees(self.tilt_deg),
         )
 
     @classmethod
     def from_payload(cls, payload: bytes) -> Status:
-        if len(payload) != 6:
-            raise ValueError(f"STATUS payload must be 6 bytes, got {len(payload)}")
-        last_seq, dropped, crc_errors, effector = struct.unpack("<BHHB", payload)
-        return cls(last_seq, dropped, crc_errors, EffectorState(effector))
+        # Ten bytes since the firmware began reporting its angles. Six-byte
+        # payloads are still accepted so a host talking to older firmware keeps
+        # working, with the angles defaulting to zero rather than raising.
+        if len(payload) == STATUS_PAYLOAD_BYTES:
+            last_seq, dropped, crc_errors, effector, pan, tilt = struct.unpack("<BHHBhh", payload)
+            return cls(
+                last_seq, dropped, crc_errors, EffectorState(effector), pan / 100.0, tilt / 100.0
+            )
+        if len(payload) == STATUS_PAYLOAD_BYTES_LEGACY:
+            last_seq, dropped, crc_errors, effector = struct.unpack("<BHHB", payload)
+            return cls(last_seq, dropped, crc_errors, EffectorState(effector))
+        raise ValueError(
+            f"STATUS payload must be {STATUS_PAYLOAD_BYTES} bytes "
+            f"(or {STATUS_PAYLOAD_BYTES_LEGACY} from older firmware), got {len(payload)}"
+        )
 
 
 def _to_centidegrees(angle_deg: float) -> int:

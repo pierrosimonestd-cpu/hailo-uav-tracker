@@ -31,7 +31,12 @@ static const int PIN_EFFECTOR = 21;
 // ------------------------------------------------------------------ behaviour
 static const uint32_t BAUD_RATE = 500000;
 static const uint32_t FAILSAFE_TIMEOUT_MS = 500;
-static const uint32_t STATUS_INTERVAL_MS = 200;
+// 50 Hz, not 5. The status frame now carries the turret's angles, and the host
+// uses them to cancel the camera's own motion from what it sees; an angle
+// reported five times a second would be up to 200 ms stale, which is worse
+// than the model it replaces. A 16-byte frame at 50 Hz is 800 B/s against a
+// 500 kbaud link, so the cost is nothing.
+static const uint32_t STATUS_INTERVAL_MS = 20;
 static const uint32_t CONTROL_INTERVAL_MS = 10;  // 100 Hz servo update
 
 // MG90S at 4.8 V manages 60 degrees in 0.1 s. Commanding faster than that
@@ -156,6 +161,12 @@ static void sendStatus() {
   status.dropped_frames = droppedFrames;
   status.crc_errors = decoder.crcErrors();
   status.effector = effectorOn ? 1 : 0;
+  // What the servos are being driven to right now, after this firmware's own
+  // slew limiting -- not the last commanded target. The host subtracts this
+  // from the apparent target bearing to cancel the camera's own motion, so it
+  // must be the angle in effect, not the one being approached.
+  status.pan_centideg = (int16_t)(currentPan * 100.0f + (currentPan >= 0 ? 0.5f : -0.5f));
+  status.tilt_centideg = (int16_t)(currentTilt * 100.0f + (currentTilt >= 0 ? 0.5f : -0.5f));
   sendFrame(Serial, MSG_STATUS, statusSeq++, (const uint8_t *)&status, sizeof(status));
 }
 

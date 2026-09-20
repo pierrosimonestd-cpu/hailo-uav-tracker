@@ -35,12 +35,22 @@ struct __attribute__((packed)) SetAnglesPayload {
   uint8_t effector;
 };
 
-// STATUS payload: last sequence seen, then the two error counters.
+// STATUS payload: last sequence seen, the two error counters, then the angles
+// the firmware is currently driving, in centidegrees.
+//
+// The angles are what makes camera ego-motion cancellable on the host. With a
+// camera bolted to the turret, apparent target motion in the image is the sum
+// of the target's motion and the turret's own; subtracting the turret's angle
+// at capture time leaves the target's. Doing that from the host's *model* of
+// the servos leaves whatever the model gets wrong, so the firmware reports
+// what it is actually commanding instead.
 struct __attribute__((packed)) StatusPayload {
   uint8_t last_seq;
   uint16_t dropped_frames;
   uint16_t crc_errors;
   uint8_t effector;
+  int16_t pan_centideg;
+  int16_t tilt_centideg;
 };
 
 inline uint8_t crc8(const uint8_t *data, uint8_t length) {
