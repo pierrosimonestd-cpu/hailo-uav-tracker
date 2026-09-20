@@ -421,3 +421,71 @@ def test_trajectories_are_finite():
         for t in (0.0, 1.0, 5.0):
             azimuth, elevation = trajectory.at(t)
             assert math.isfinite(azimuth) and math.isfinite(elevation)
+
+
+# ------------------------------------------------------------ axis inversion
+
+
+def _reversible(invert_pan: bool = False, invert_tilt: bool = False) -> PanTiltController:
+    """Like _controller above, but with the axis travel and reversal pinned.
+
+    Explicit limits because the inversion mirrors about the centre of travel,
+    so the test would be asserting against defaults it did not choose.
+    """
+    return PanTiltController(
+        geometry=CameraGeometry(1280, 720, 66.0),
+        pan_gains=PIDGains(4.5, 0.5, 0.25),
+        tilt_gains=PIDGains(4.5, 0.5, 0.25),
+        pan_limits=AxisLimits(0.0, 180.0, 600.0, 0.2, invert=invert_pan),
+        tilt_limits=AxisLimits(20.0, 160.0, 600.0, 0.2, invert=invert_tilt),
+    )
+
+
+def test_inversion_mirrors_the_command_about_the_centre_of_travel():
+    """A servo fitted mirrored drives away from the target without this."""
+    straight = _reversible()
+    reversed_ = _reversible(invert_pan=True, invert_tilt=True)
+
+    # Same target, off-centre so the controller actually moves.
+    for _ in range(20):
+        plain = straight.update((900.0, 250.0), 0.05)
+        flipped = reversed_.update((900.0, 250.0), 0.05)
+
+    assert plain.pan_deg == pytest.approx((0.0 + 180.0) - flipped.pan_deg, abs=1e-6)
+    assert plain.tilt_deg == pytest.approx((20.0 + 160.0) - flipped.tilt_deg, abs=1e-6)
+
+
+def test_inversion_keeps_the_command_inside_the_axis_limits():
+    """Mirroring about the centre, not negating: 20-160 must stay 20-160."""
+    controller = _reversible(invert_tilt=True)
+    for _ in range(80):
+        command = controller.update((640.0, 719.0), 0.05)
+        assert 20.0 <= command.tilt_deg <= 160.0
+
+
+def test_inversion_does_not_touch_the_control_mathematics():
+    """The errors and rates are computed in the optical frame either way.
+
+    If inversion leaked into the loop rather than staying an output mapping,
+    the reported error would change sign and the integrator would wind the
+    wrong way -- which is a far worse bug than a mirrored servo.
+    """
+    straight = _reversible()
+    reversed_ = _reversible(invert_pan=True, invert_tilt=True)
+
+    for _ in range(15):
+        plain = straight.update((900.0, 250.0), 0.05)
+        flipped = reversed_.update((900.0, 250.0), 0.05)
+
+    assert plain.pan_error_deg == pytest.approx(flipped.pan_error_deg, abs=1e-9)
+    assert plain.tilt_error_deg == pytest.approx(flipped.tilt_error_deg, abs=1e-9)
+    assert plain.pan_rate_deg_s == pytest.approx(flipped.pan_rate_deg_s, abs=1e-9)
+
+
+def test_an_uninverted_axis_is_unchanged():
+    """The default must be a no-op, or every existing rig changes behaviour."""
+    controller = _reversible()
+    for _ in range(10):
+        command = controller.update((900.0, 250.0), 0.05)
+    assert command.pan_deg == pytest.approx(controller.pan_deg, abs=1e-9)
+    assert command.tilt_deg == pytest.approx(controller.tilt_deg, abs=1e-9)

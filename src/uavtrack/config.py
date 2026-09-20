@@ -60,6 +60,8 @@ class AxisConfig:
     max_deg: float = 180.0
     max_rate_deg_s: float = 600.0
     deadband_deg: float = 0.5
+    #: Reverse this axis, for a servo mounted mirrored. See AxisLimits.invert.
+    invert: bool = False
     kp: float = 4.5
     ki: float = 0.5
     kd: float = 0.25

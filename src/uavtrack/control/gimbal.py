@@ -111,12 +111,33 @@ class AxisLimits:
         deadband_deg: Angular error below which no correction is issued. Hobby
             servos dither audibly and wear their gears chasing sub-degree errors
             that the backlash cannot resolve anyway.
+        invert: Mirror the commanded angle about the centre of travel before it
+            leaves the controller. Whether a servo turns the way the optics
+            expect depends on how the horn was fitted, which is not something
+            this code can know: a rig assembled mirrored drives away from the
+            target instead of towards it. This is the software equivalent of a
+            servo reverser and applies to the output only -- the controller's
+            internal state, its actuator model and its bearing history stay in
+            the optical frame, so no control mathematics changes sign with it.
     """
 
     min_deg: float = 0.0
     max_deg: float = 180.0
     max_rate_deg_s: float = 180.0
     deadband_deg: float = 0.5
+    invert: bool = False
+
+
+def _to_servo_frame(angle_deg: float, limits: AxisLimits) -> float:
+    """Map a commanded angle from the optical frame into the servo's own.
+
+    Mirroring about the centre of travel rather than negating keeps the result
+    inside the same limits: an axis running 20-160 degrees still lands in
+    20-160.
+    """
+    if not limits.invert:
+        return angle_deg
+    return (limits.min_deg + limits.max_deg) - angle_deg
 
 
 @dataclass
@@ -384,8 +405,10 @@ class PanTiltController:
         self._angle_history.append((self._time, pan_actual, tilt_actual))
 
         return GimbalCommand(
-            pan_deg=self.pan_deg,
-            tilt_deg=self.tilt_deg,
+            # Servo frame, not the optical frame the loop reasons in: these are
+            # the numbers that go on the wire.
+            pan_deg=_to_servo_frame(self.pan_deg, self.pan_limits),
+            tilt_deg=_to_servo_frame(self.tilt_deg, self.tilt_limits),
             pan_error_deg=pan_error,
             tilt_error_deg=tilt_error,
             pan_target_bearing_deg=pan_bearing,

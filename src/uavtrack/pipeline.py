@@ -202,4 +202,5 @@ def _axis_limits(axis) -> AxisLimits:
         max_deg=axis.max_deg,
         max_rate_deg_s=axis.max_rate_deg_s,
         deadband_deg=axis.deadband_deg,
+        invert=axis.invert,
     )
