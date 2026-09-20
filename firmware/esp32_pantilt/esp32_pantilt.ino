@@ -38,6 +38,16 @@ static const uint32_t CONTROL_INTERVAL_MS = 10;  // 100 Hz servo update
 // achieves nothing except current draw.
 static const float MAX_RATE_DEG_PER_S = 600.0f;
 
+// Servo::write() takes whole degrees, so commanding through it quantises every
+// position to one degree. On this rig one degree is about 32 pixels of frame,
+// and the turret steps between them visibly instead of tracking smoothly.
+// writeMicroseconds() carries the fractional angle through to the pulse, which
+// over 500-2400 us across 180 degrees is roughly 10.6 us per degree -- finer
+// than the servo's own resolution, which is where the limit belongs.
+static const int PULSE_MIN_US = 500;
+static const int PULSE_MAX_US = 2400;
+static const float SERVO_RANGE_DEG = 180.0f;
+
 static const float PAN_MIN_DEG = 0.0f;
 static const float PAN_MAX_DEG = 180.0f;
 // The camera mount fouls the base below 20 degrees; see docs/hardware.md.
@@ -84,8 +94,8 @@ static void attachServos() {
   servoTilt.setPeriodHertz(50);
   // 500-2400 us rather than the 1000-2000 default: MG90S servos use the wider
   // range, and clipping it throws away roughly a third of the travel.
-  servoPan.attach(PIN_PAN, 500, 2400);
-  servoTilt.attach(PIN_TILT, 500, 2400);
+  servoPan.attach(PIN_PAN, PULSE_MIN_US, PULSE_MAX_US);
+  servoTilt.attach(PIN_TILT, PULSE_MIN_US, PULSE_MAX_US);
   servosAttached = true;
 }
 
@@ -149,6 +159,12 @@ static void sendStatus() {
   sendFrame(Serial, MSG_STATUS, statusSeq++, (const uint8_t *)&status, sizeof(status));
 }
 
+static int angleToMicroseconds(float angleDeg) {
+  const float span = (float)(PULSE_MAX_US - PULSE_MIN_US);
+  float pulse = PULSE_MIN_US + (angleDeg / SERVO_RANGE_DEG) * span;
+  return (int)clampf(pulse + 0.5f, (float)PULSE_MIN_US, (float)PULSE_MAX_US);
+}
+
 static void stepServos(float dt) {
   const float maxStep = MAX_RATE_DEG_PER_S * dt;
 
@@ -161,8 +177,8 @@ static void stepServos(float dt) {
   currentTilt += deltaTilt;
 
   if (servosAttached) {
-    servoPan.write((int)(currentPan + 0.5f));
-    servoTilt.write((int)(currentTilt + 0.5f));
+    servoPan.writeMicroseconds(angleToMicroseconds(currentPan));
+    servoTilt.writeMicroseconds(angleToMicroseconds(currentTilt));
   }
 }
 
