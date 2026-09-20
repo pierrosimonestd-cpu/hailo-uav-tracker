@@ -26,6 +26,11 @@ class DetectorConfig:
     conf_threshold: float = 0.35
     iou_threshold: float = 0.45
     labels: list[str] = field(default_factory=lambda: ["uav"])
+    #: Class names to keep, or None for all of them. A model trained on many
+    #: classes will happily hand the tracker every chair in the room, and the
+    #: controller will dutifully point at one; naming the classes that matter
+    #: is what makes a general detector usable as a turret's eyes.
+    classes: list[str] | None = None
 
 
 @dataclass

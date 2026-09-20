@@ -244,3 +244,82 @@ def test_commands_stay_inside_the_configured_limits():
             continue
         assert 0.0 <= result.command.pan_deg <= 180.0
         assert 20.0 <= result.command.tilt_deg <= 160.0
+
+
+# ------------------------------------------------------------ class filtering
+
+
+class LabelledDetector(DetectorBackend):
+    """Always returns the same two detections, and advertises class names.
+
+    Constant rather than scripted on purpose: `warmup()` runs three throwaway
+    inferences before the first real frame, so a per-frame script would be
+    three entries out of step with the frames these tests assert on.
+    """
+
+    def __init__(self, detections: list[Detection], labels: tuple[str, ...]) -> None:
+        self.detections = detections
+        self.labels = labels
+
+    @property
+    def input_size(self) -> tuple[int, int]:
+        return (640, 640)
+
+    @property
+    def name(self) -> str:
+        return "labelled"
+
+    def infer(self, frame: np.ndarray) -> list[Detection]:  # noqa: ARG002
+        return list(self.detections)
+
+
+PERSON_AND_FACE = [
+    Detection(100.0, 300.0, 200.0, 500.0, 0.9, class_id=0),
+    Detection(900.0, 300.0, 960.0, 360.0, 0.9, class_id=1),
+]
+
+
+def _config_with(classes):
+    config = PipelineConfig()
+    config.detector.classes = classes
+    config.camera.width, config.camera.height = 1280, 720
+    config.link.enabled = False
+    return config
+
+
+def test_no_filter_keeps_every_class():
+    detector = LabelledDetector(PERSON_AND_FACE, labels=("person", "face"))
+    pipeline = TrackingPipeline(_config_with(None), detector=detector, source=ScriptedSource(4))
+    assert [len(r.detections) for r in pipeline.run()] == [2, 2, 2, 2]
+
+
+def test_filter_keeps_only_the_named_class():
+    """The whole point: a general detector pointed at one kind of thing."""
+    detector = LabelledDetector(PERSON_AND_FACE, labels=("person", "face"))
+    pipeline = TrackingPipeline(_config_with(["face"]), detector=detector, source=ScriptedSource(4))
+
+    for result in pipeline.run():
+        assert len(result.detections) == 1
+        assert result.detections[0].class_id == 1
+
+
+def test_filter_is_case_insensitive_and_accepts_several():
+    detector = LabelledDetector(PERSON_AND_FACE, labels=("person", "face"))
+    pipeline = TrackingPipeline(
+        _config_with(["Face", "PERSON"]), detector=detector, source=ScriptedSource(3)
+    )
+    assert all(len(r.detections) == 2 for r in pipeline.run())
+
+
+def test_an_unknown_class_name_fails_loudly_at_construction():
+    """Silently matching nothing would look exactly like a broken camera."""
+    detector = LabelledDetector(PERSON_AND_FACE, labels=("person", "face"))
+    with pytest.raises(ValueError, match="which this model does not have"):
+        TrackingPipeline(_config_with(["hand"]), detector=detector, source=ScriptedSource(1))
+
+
+def test_filtering_without_labels_is_rejected():
+    """A backend that exposes no labels cannot honour a name-based filter."""
+    detector = LabelledDetector(PERSON_AND_FACE, labels=())
+    with pytest.raises(ValueError, match="no labels"):
+        TrackingPipeline(_config_with(["face"]), detector=detector, source=ScriptedSource(1))

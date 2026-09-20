@@ -77,6 +77,7 @@ class TrackingPipeline:
             config.camera.source, config.camera.width, config.camera.height, config.camera.fps
         )
         self.link = link
+        self._keep_class_ids = self._resolve_classes()
 
         self.tracker = ByteTracker(
             high_threshold=config.tracker.high_threshold,
@@ -111,6 +112,33 @@ class TrackingPipeline:
         self._last_timestamp: float | None = None
         self._had_target = False
 
+    def _resolve_classes(self) -> set[int] | None:
+        """Class indices to keep, from the names in the config.
+
+        Resolved once against the detector's own label list rather than against
+        the config's, so a mismatch between the two surfaces here as a clear
+        error instead of as a turret that silently never sees anything.
+        """
+        wanted = self.config.detector.classes
+        if not wanted:
+            return None
+
+        labels = list(getattr(self.detector, "labels", ()) or ())
+        if not labels:
+            raise ValueError(
+                "detector.classes was set but the backend exposes no labels to match "
+                "them against; remove the filter or give the backend a label list"
+            )
+
+        lookup = {name.lower(): index for index, name in enumerate(labels)}
+        missing = [name for name in wanted if name.lower() not in lookup]
+        if missing:
+            raise ValueError(
+                f"detector.classes names {missing} which this model does not have. "
+                f"It knows: {', '.join(labels)}"
+            )
+        return {lookup[name.lower()] for name in wanted}
+
     def run(self, max_frames: int | None = None) -> Iterator[FrameResult]:
         """Iterate over frames, yielding one :class:`FrameResult` each.
 
@@ -139,6 +167,8 @@ class TrackingPipeline:
 
             start = time.perf_counter()
             detections = self.detector.infer(frame)
+            if self._keep_class_ids is not None:
+                detections = [d for d in detections if d.class_id in self._keep_class_ids]
             timings["detect"] = (time.perf_counter() - start) * 1000.0
 
             start = time.perf_counter()

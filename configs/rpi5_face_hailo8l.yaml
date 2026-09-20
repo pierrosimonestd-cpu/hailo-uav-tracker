@@ -1,0 +1,95 @@
+# Face tracking on the Hailo-8L, with no compilation step.
+#
+# The UAV configuration needs a .hef built from this project's own weights, and
+# building one needs the Hailo Dataflow Compiler, which is x86_64 Linux only and
+# behind a Developer Zone account. That puts the accelerator out of reach for
+# anyone who just wants to see the system run.
+#
+# This configuration does not have that problem. `yolov5s_personface` ships with
+# the `hailo-all` package, is already compiled for the Hailo-8L, and emits
+# on-chip NMS in the same layout the Hailo backend here already decodes. It
+# turns the turret into a face tracker, which is a fair demonstration of the
+# whole loop -- detect, track, select, point -- at full accelerator speed.
+#
+# Measured on the reference rig (Pi 5, 4 GB, Debian 13):
+#   inference 18.4 ms median, end to end 18.5 ms, 54 fps through this pipeline
+#   (the device alone does 64.5 fps; the difference is this project's
+#   synchronous wrapper, see docs/benchmarks.md section 5)
+
+detector:
+  # Ships with hailo-all. No compilation, no Developer Zone account.
+  model: /usr/share/hailo-models/yolov5s_personface_h8l.hef
+  backend: hailo
+  conf_threshold: 0.40
+  iou_threshold: 0.45
+  # Order taken from the model's own metadata in
+  # /usr/share/hailo-models/yolov5_personface.json, which lists
+  # ['unlabeled', 'person', 'face'] with label_offset 1 -- so the HEF's class 0
+  # is 'person' and class 1 is 'face'. Read, not assumed.
+  labels: [person, face]
+  # Track faces, not whole people. A face is a small, well-defined target that
+  # moves the way the controller expects; a person box spans most of the frame
+  # at close range, and its centre barely moves when they lean.
+  classes: [face]
+
+camera:
+  source: picamera
+  width: 1280
+  height: 720
+  fps: 30.0
+  # MEASURE THIS for your own camera and mode. The value here is for an ov5647
+  # (Camera Module v1) at 1280x720, where picamera2 selects the 1920x1080
+  # sensor mode and reads out a 1928x1080 crop of the 2592x1944 array. The
+  # sensor's full-width FOV is 53.5 degrees, so the effective horizontal FOV is
+  #     53.5 * 1928/2592 = 39.8 degrees
+  # Taking 53.5 from the datasheet would overstate the loop gain by 34%, and
+  # using a Camera Module 3's 66 would overstate it by 66%, which oscillates.
+  # `python -c "from picamera2 import Picamera2; ..."` and read ScalerCrop.
+  horizontal_fov_deg: 39.8
+
+tracker:
+  high_threshold: 0.5
+  low_threshold: 0.1
+  match_threshold: 0.3
+  second_match_threshold: 0.2
+  # 15 frames at ~54 fps is under 0.3 s of coasting. Long coasting on a target
+  # nobody has seen lets the filter drift and then snap when it re-acquires,
+  # which reads as the turret lunging across the room.
+  max_age: 15
+  min_hits: 3
+
+control:
+  # MEASURED on this rig: 18.5 ms end to end, from
+  # benchmarks/results/latency_yolov5s-personface-int8-hailo8l.json
+  latency_s: 0.019
+  feedforward_gain: 0.9
+  estimator_window: 5
+  home_pan_deg: 90.0
+  home_tilt_deg: 90.0
+  pan:
+    min_deg: 0.0
+    max_deg: 180.0
+    max_rate_deg_s: 600.0
+    deadband_deg: 0.5
+    # Set `invert` per axis if your servos are mounted mirrored: the turret
+    # will drive away from the target rather than towards it, and no amount of
+    # gain tuning fixes that.
+    invert: false
+    kp: 4.5
+    ki: 0.5
+    kd: 0.25
+  tilt:
+    min_deg: 20.0
+    max_deg: 160.0
+    max_rate_deg_s: 600.0
+    deadband_deg: 0.5
+    invert: false
+    kp: 4.5
+    ki: 0.5
+    kd: 0.25
+
+link:
+  enabled: true
+  port: /dev/ttyUSB0
+  baudrate: 500000
+  heartbeat_interval_s: 0.2
